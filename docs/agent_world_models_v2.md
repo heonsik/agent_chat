@@ -1,4 +1,4 @@
-# 에이전트 세계관 모델링 (Mermaid)
+﻿# 에이전트 세계관 모델링 (Mermaid)
 
 ## 1) 클래스 다이어그램
 
@@ -176,3 +176,5 @@ UI shows yellow blink.
 click icon opens job panel for approve, cancel, stop.
 end note
 ```
+
+> 이 상태 그래프는 LangGraph를 고정 사용하여 구현하며, 노드별 LLM 호출은 ProviderAdapter로 분리한다.

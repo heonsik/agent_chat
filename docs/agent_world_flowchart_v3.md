@@ -1,4 +1,4 @@
-# 에이전트 세계관 플로우차트 (Mermaid 전용, v3)
+﻿# 에이전트 세계관 플로우차트 (Mermaid 전용, v3)
 
 아래 Mermaid 코드를 Mermaid Live Editor에 붙여넣어 확인하세요.
 
@@ -164,3 +164,5 @@ W_FAIL -.->|event: fail_red_blink| U_BOARD
 W_CANC -.->|event: canceled_gray| U_BOARD
 R_EXEC -.->|log_stream| U_LOG
 ```
+
+> 참고: JobRunner 내부 흐름은 LangGraph를 고정 사용하여 그래프 노드/엣지로 모델링한다.

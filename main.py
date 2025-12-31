@@ -20,6 +20,7 @@ import platform
 
 # IMPORT / GUI AND MODULES AND WIDGETS
 # ///////////////////////////////////////////////////////////////
+from app.ui.bindings import set_confirm_state, set_worker_status
 from app.ui_vendor.modules import *
 from app.ui_vendor.widgets import *
 os.environ["QT_FONT_DPI"] = "96" # FIX Problem for High DPI and Scale above 100%
@@ -327,6 +328,16 @@ class MainWindow(QMainWindow):
         self.ui.session_list = session_list
         self.ui.options_panel = options_panel
         self.ui.left_sidebar = left_sidebar
+
+        set_worker_status(
+            self.ui,
+            {
+                "worker-1": "running",
+                "worker-2": "waiting_confirm",
+                "worker-3": "idle",
+            },
+        )
+        set_confirm_state(self.ui, "lock")
 
         layout.addWidget(left_sidebar)
         layout.addWidget(splitter, 1)

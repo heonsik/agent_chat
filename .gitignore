@@ -2,3 +2,6 @@ __pycache__/
 .venv/
 .git/
 .pyc
+docs/mvp_checklist.md
+build/
+app/storage/**/*.log
