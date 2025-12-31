@@ -1,0 +1,8 @@
+﻿roles:
+  planner: app/llm/prompts/roles/planner.md
+  solver: app/llm/prompts/roles/solver.md
+  reporter: app/llm/prompts/roles/reporter.md
+base:
+  system: app/llm/prompts/base/system.md
+  tool_format: app/llm/prompts/base/tool_format.md
+pack: app/llm/prompts/packs/default.yaml

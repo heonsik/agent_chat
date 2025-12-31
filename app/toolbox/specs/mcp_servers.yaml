@@ -1,0 +1,5 @@
+﻿# MCP server registry
+servers:
+  nav_server:
+    transport: sse
+    url: http://localhost:8080/sse

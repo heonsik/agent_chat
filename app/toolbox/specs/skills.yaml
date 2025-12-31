@@ -1,0 +1,5 @@
+﻿# Skills registry
+skills:
+  play_song:
+    provider: local
+    description: "Play a song"

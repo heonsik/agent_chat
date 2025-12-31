@@ -1,0 +1,39 @@
+﻿# ToolSpec registry
+# type: local | mcp | skills
+
+tools:
+  NavTool:
+    type: mcp
+    mcp:
+      server: nav_server
+      tool_name: set_destination
+    groupKey: MonitorBox
+    capacity: 1
+    confirmPolicy: always
+    longtime: true
+    description: "Set destination and route guidance"
+    inputSchema: {}
+    outputSchema: {}
+
+  WeatherTool:
+    type: local
+    local:
+      entry: app.toolbox.tools_local.weather:get_weather
+    capacity: infinite
+    confirmPolicy: none
+    longtime: false
+    description: "Weather lookup"
+    inputSchema: {}
+    outputSchema: {}
+
+  SongTool:
+    type: skills
+    skills:
+      skill_id: play_song
+    groupKey: SongPool
+    capacity: 2
+    confirmPolicy: none
+    longtime: false
+    description: "Play a song"
+    inputSchema: {}
+    outputSchema: {}

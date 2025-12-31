@@ -1,0 +1,2 @@
+toolbox:
+  specs: app/toolbox/specs/tools.yaml
