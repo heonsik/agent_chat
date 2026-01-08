@@ -38,7 +38,28 @@
 - **Solver**: 툴 없이 해결 가능한 TODO 처리
 - **Evidence/Reporter**: 실행 결과를 사용자에게 보여줄 형태로 요약/근거화
 
-> 원칙: LLM은 무상태이므로, 매 호출마다 **히스토리 요약 + 중요 메모리 + 툴설명서**를 편지에 포함한다.
+> 원칙: LLM은 무상태이므로, 매 호출마다 **역할에 맞는 최소 컨텍스트**를 편지에 포함한다.
+
+### 3.2) 프롬프트 조립 원칙 (역할별 최소 컨텍스트)
+
+- 고정 지침(System/Role)과 가변 지침(요약 히스토리/메모리/툴설명)을 분리한다.
+- 역할별로 필요한 정보만 주입한다.
+  - Planner: system + role(planner) + 요약 히스토리 + 사용자 요청
+  - Tool-Chooser: system + role(tool_select) + todo + 툴 목록 요약
+  - Param Builder: system + role(tool_param) + todo + 선택된 툴 상세 설명
+  - Reporter/Evidence: system + role(report) + 실행 결과 + 핵심 근거
+- ToolSpec은 단일 소스로 관리하고, **필요한 툴만** 요약해 주입한다.
+
+### 3.3) 로그/근거 주입 규칙 (필요 시만)
+
+- 사용자 UI에는 전체 로그를 저장/표시하되, LLM에는 기본적으로 요약 상태만 제공한다.
+- 로그 주입은 규칙 기반으로 결정한다.
+  - 실패/예외 발생 시
+  - 사용자 질문이 “왜/근거/설명” 성격일 때
+  - 재시도 판단이 필요한 오류 유형일 때
+  - 승인/거부 사유 설명이 정책상 필요한 경우
+- LangGraph 내 `CheckOutcome`/`CheckIntent` 같은 노드에서 분기하고,
+  필요 시에만 Evidence/Reporter LLM을 호출한다.
 
 
 ### 3.1) Orchestration Engine (LangGraph, 고정 사용)
