@@ -134,7 +134,8 @@ state WorkerJob {
   UpdateState --> PickTodo
 
   NeedTool --> ToolSelect : tool_needed
-  ToolSelect --> AcquireTool : request_tool
+  ToolSelect --> ToolParam : select_tool
+  ToolParam --> AcquireTool : build_params
 
   AcquireTool --> ToolAvailable : acquired
   AcquireTool --> ToolLocked : locked
@@ -146,12 +147,15 @@ state WorkerJob {
   WaitUser --> ExecTool : user_approve
   WaitUser --> Canceled : user_reject
 
-  ToolLocked --> WaitUser : ask_wait_cancel
+  ToolLocked --> WaitUser : ask_wait_cancel_stop
   ToolLocked --> WaitRetry : user_wait
   WaitRetry --> AcquireTool : retry_same_todo
   ToolLocked --> Canceled : user_cancel
+  ToolLocked --> Canceled : user_stop_other
 
-  ExecTool --> UpdateState : save_result
+  ExecTool --> Evidence : need_evidence
+  ExecTool --> UpdateState : no_evidence
+  Evidence --> UpdateState : save_result
   UpdateState --> ReleaseTool : release_if_needed
   ReleaseTool --> PickTodo
 

@@ -111,7 +111,8 @@ subgraph RUN["JOB_RUNNER 내부 - TODO 순차 실행"]
   R_SOLVE["LLM_SOLVER<br/>툴 없이 해결"]:::llm
   R_UPD1["STATE_UPDATE<br/>결과, 근거 저장"]:::worker
 
-  R_CHOOSE["LLM_TOOL_CHOICE<br/>툴 선택, 파라미터 구성"]:::llm
+  R_CHOOSE["LLM_TOOL_CHOICE<br/>툴 선택"]:::llm
+  R_PARAM["LLM_TOOL_PARAM<br/>파라미터 구성"]:::llm
   R_ACQ["TOOL_ACQUIRE<br/>공구 대여 시도"]:::tool
   R_AVAIL{"TOOL_AVAILABLE?<br/>재고, 그룹락 OK"}:::decision
 
@@ -119,17 +120,21 @@ subgraph RUN["JOB_RUNNER 내부 - TODO 순차 실행"]
   R_WAIT_CONFIRM["USER_CONFIRM_INTERRUPT<br/>승인/거부"]:::warn
   R_CONFIRM{"CONFIRM_REQUIRED?<br/>승인 필요"}:::decision
   R_EXEC["RUN_TOOL<br/>툴 실행"]:::tool
+  R_NEED_EVI{"NEED_EVIDENCE?<br/>근거 필요"}:::decision
   R_REL["TOOL_RELEASE<br/>공구 반납"]:::tool
   R_UPD2["LLM_EVIDENCE<br/>결과 요약, 근거화"]:::llm
+  R_SAVE2["STATE_UPDATE<br/>결과, 근거 저장"]:::worker
 
   R_PICK --> R_NEED
 
   R_NEED -->|no| R_SOLVE --> R_UPD1 --> R_PICK
 
-  R_NEED -->|yes| R_CHOOSE --> R_ACQ
+  R_NEED -->|yes| R_CHOOSE --> R_PARAM --> R_ACQ
   R_AVAIL -->|yes: acquired| R_CONFIRM
   R_AVAIL -->|no: locked| R_WAIT_LOCK
-  R_CONFIRM -->|no| R_EXEC --> R_UPD2 --> R_REL --> R_PICK
+  R_CONFIRM -->|no| R_EXEC --> R_NEED_EVI
+  R_NEED_EVI -->|yes| R_UPD2 --> R_SAVE2 --> R_REL --> R_PICK
+  R_NEED_EVI -->|no| R_SAVE2 --> R_REL --> R_PICK
   R_CONFIRM -->|yes| R_WAIT_CONFIRM
 end
 
@@ -137,6 +142,7 @@ W_RUN --> R_PICK
 
 %% Toolbox wiring
 R_CHOOSE --> T_SPEC
+R_PARAM --> T_SPEC
 R_ACQ --> T_ACQ --> T_INV
 T_INV -->|acquired| R_AVAIL
 T_INV -->|locked| R_AVAIL
