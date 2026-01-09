@@ -39,20 +39,23 @@ end
 CUST["CUSTOMER<br/>고객(사용자)"] --> U_CHAT
 
 %% =========================
-%% GENERAL MANAGER (메인 스레드)
+%% GENERAL MANAGER (LangGraph)
 %% =========================
-subgraph MAIN["GENERAL_MANAGER - 총괄매니저(메인 스레드)"]
+subgraph MAIN["GENERAL_MANAGER - 총괄매니저(LangGraph)"]
   M_WAIT["WAIT_INPUT<br/>입력대기"]:::main
-  M_CTX["BUILD_CONTEXT<br/>지침, 히스토리, 메모리, 툴설명서 조립"]:::main
-  M_PROV["PROVIDER_NORMALIZE<br/>LLM 입출력 형식 통일"]:::main
-  M_PLAN["LLM_PLANNER<br/>요청해석, 계획, TODO 생성"]:::llm
-  M_DECIDE{"ANSWER_NOW?<br/>바로 답변 가능"}:::decision
-  M_REPORT["LLM_REPORTER<br/>고객용 답변 작성"]:::llm
-  M_SUBMIT["JOB_SUBMIT<br/>작업지시서 제출"]:::main
+  M_ROUTE["INTENT_ROUTE<br/>START/STATUS/CANCEL/RESULT/LIST"]:::main
+  M_CREATE["JOB_CREATE<br/>작업지시서 생성"]:::main
+  M_STATUS["JOB_STATUS_READ<br/>상태 조회"]:::main
+  M_CANCEL["JOB_CANCEL<br/>취소 요청"]:::danger
+  M_RESULT["JOB_RESULT_READ<br/>결과 요약 요청"]:::main
+  M_REPLY["REPLY_USER<br/>즉시 응답"]:::main
 
-  M_WAIT --> M_CTX --> M_PROV --> M_PLAN --> M_DECIDE
-  M_DECIDE -->|yes| M_REPORT --> U_CHAT --> M_WAIT
-  M_DECIDE -->|no: todos| M_SUBMIT --> M_WAIT
+  M_WAIT --> M_ROUTE
+  M_ROUTE -->|start| M_CREATE --> M_REPLY --> U_CHAT --> M_WAIT
+  M_ROUTE -->|status| M_STATUS --> M_REPLY --> U_CHAT --> M_WAIT
+  M_ROUTE -->|cancel| M_CANCEL --> M_REPLY --> U_CHAT --> M_WAIT
+  M_ROUTE -->|result| M_RESULT --> M_REPLY --> U_CHAT --> M_WAIT
+  M_ROUTE -->|list| M_REPLY --> U_CHAT --> M_WAIT
 end
 
 U_CHAT --> M_WAIT
@@ -74,7 +77,7 @@ M_SUBMIT --> JM_IN
 %% =========================
 subgraph WP["SERVERS - 서버들(WorkerPool, N개 동시 실행)"]
   W_FETCH["FETCH_JOB<br/>작업 가져오기"]:::worker
-  W_RUN["JOB_RUNNER<br/>TodoExecutor 실행"]:::worker
+  W_RUN["JOB_RUNNER<br/>DeepAgent 실행 어댑터"]:::worker
   W_DONE["JOB_DONE<br/>완료"]:::worker
   W_FAIL["JOB_FAIL<br/>실패"]:::danger
   W_CANC["JOB_CANCELED<br/>취소"]:::warn
@@ -102,65 +105,65 @@ subgraph TBX["TOOLBOX - 공구박스(재고, 수량, 그룹락)"]
 end
 
 %% =========================
-%% JOB RUNNER 내부 (TODO 순차)
+%% DEEP AGENT (Worker 내부)
 %% =========================
-subgraph RUN["JOB_RUNNER 내부 - TODO 순차 실행"]
-  R_PICK["TODO_PICK<br/>다음 TODO 선택"]:::worker
-  R_NEED{"NEED_TOOL?<br/>툴 필요"}:::decision
+subgraph DA["DEEP_AGENT - 워커 내부 실행"]
+  D_PLAN["PLAN/TODO<br/>작업 분해"]:::llm
+  D_STEP["STEP_LOOP<br/>todo 순차 처리"]:::worker
+  D_NEED{"NEED_TOOL?<br/>툴 필요"}:::decision
+  D_SOLVE["LLM_SOLVER<br/>툴 없이 해결"]:::llm
+  D_TOOL["CALL_TOOL<br/>툴 호출"]:::tool
+  D_EVI{"NEED_EVIDENCE?<br/>근거 필요"}:::decision
+  D_REPORT["LLM_EVIDENCE<br/>결과 요약"]:::llm
 
-  R_SOLVE["LLM_SOLVER<br/>툴 없이 해결"]:::llm
-  R_UPD1["STATE_UPDATE<br/>결과, 근거 저장"]:::worker
-
-  R_CHOOSE["LLM_TOOL_CHOICE<br/>툴 선택"]:::llm
-  R_PARAM["LLM_TOOL_PARAM<br/>파라미터 구성"]:::llm
-  R_ACQ["TOOL_ACQUIRE<br/>공구 대여 시도"]:::tool
-  R_AVAIL{"TOOL_AVAILABLE?<br/>재고, 그룹락 OK"}:::decision
-
-  R_WAIT_LOCK["USER_CONFIRM_INTERRUPT<br/>대기/취소/중단"]:::warn
-  R_WAIT_CONFIRM["USER_CONFIRM_INTERRUPT<br/>승인/거부"]:::warn
-  R_CONFIRM{"CONFIRM_REQUIRED?<br/>승인 필요"}:::decision
-  R_EXEC["RUN_TOOL<br/>툴 실행"]:::tool
-  R_NEED_EVI{"NEED_EVIDENCE?<br/>근거 필요"}:::decision
-  R_REL["TOOL_RELEASE<br/>공구 반납"]:::tool
-  R_UPD2["LLM_EVIDENCE<br/>결과 요약, 근거화"]:::llm
-  R_SAVE2["STATE_UPDATE<br/>결과, 근거 저장"]:::worker
-
-  R_PICK --> R_NEED
-
-  R_NEED -->|no| R_SOLVE --> R_UPD1 --> R_PICK
-
-  R_NEED -->|yes| R_CHOOSE --> R_PARAM --> R_ACQ
-  R_AVAIL -->|yes: acquired| R_CONFIRM
-  R_AVAIL -->|no: locked| R_WAIT_LOCK
-  R_CONFIRM -->|no| R_EXEC --> R_NEED_EVI
-  R_NEED_EVI -->|yes| R_UPD2 --> R_SAVE2 --> R_REL --> R_PICK
-  R_NEED_EVI -->|no| R_SAVE2 --> R_REL --> R_PICK
-  R_CONFIRM -->|yes| R_WAIT_CONFIRM
+  D_PLAN --> D_STEP --> D_NEED
+  D_NEED -->|no| D_SOLVE --> D_STEP
+  D_NEED -->|yes| D_TOOL --> D_EVI
+  D_EVI -->|yes| D_REPORT --> D_STEP
+  D_EVI -->|no| D_STEP
 end
 
-W_RUN --> R_PICK
+%% =========================
+%% TOOL RUNTIME ADAPTER (정책 강제)
+%% =========================
+subgraph TRA["TOOL_RUNTIME_ADAPTER - 정책 강제"]
+  A_ACQ["ACQUIRE<br/>대여 요청"]:::tool
+  A_AVAIL{"AVAILABLE?<br/>재고/그룹락"}:::decision
+  A_WAIT_LOCK["INTERRUPT<br/>대기/취소/중단"]:::warn
+  A_CONFIRM{"CONFIRM_REQUIRED?<br/>승인 필요"}:::decision
+  A_WAIT_CONFIRM["INTERRUPT<br/>승인/거부"]:::warn
+  A_EXEC["RUN_TOOL<br/>툴 실행"]:::tool
+  A_REL["RELEASE<br/>반납"]:::tool
+
+  A_ACQ --> A_AVAIL
+  A_AVAIL -->|yes| A_CONFIRM
+  A_AVAIL -->|no| A_WAIT_LOCK
+  A_CONFIRM -->|no| A_EXEC --> A_REL
+  A_CONFIRM -->|yes| A_WAIT_CONFIRM
+end
+
+W_RUN --> D_PLAN
+D_TOOL --> A_ACQ
 
 %% Toolbox wiring
-R_CHOOSE --> T_SPEC
-R_PARAM --> T_SPEC
-R_ACQ --> T_ACQ --> T_INV
-T_INV -->|acquired| R_AVAIL
-T_INV -->|locked| R_AVAIL
-R_REL --> T_REL --> T_INV
-R_ACQ -.->|via toolbox| R_AVAIL
+A_ACQ --> T_ACQ --> T_INV
+T_INV -->|acquired| A_AVAIL
+T_INV -->|locked| A_AVAIL
+A_REL --> T_REL --> T_INV
+A_ACQ -.->|via toolbox| A_AVAIL
 
 %% User choice wiring (UI)
-R_WAIT_LOCK -->|ui_state: waiting_lock| U_BOARD
-R_WAIT_CONFIRM -->|ui_state: waiting_confirm| U_BOARD
-R_WAIT_LOCK --> U_PANEL
-R_WAIT_CONFIRM --> U_PANEL
-R_WAIT_LOCK -->|options: wait/cancel/stop_other| U_BTN
-R_WAIT_CONFIRM -->|options: approve/reject| U_BTN
+A_WAIT_LOCK -->|ui_state: waiting_lock| U_BOARD
+A_WAIT_CONFIRM -->|ui_state: waiting_confirm| U_BOARD
+A_WAIT_LOCK --> U_PANEL
+A_WAIT_CONFIRM --> U_PANEL
+A_WAIT_LOCK -->|options: wait/cancel/stop_other| U_BTN
+A_WAIT_CONFIRM -->|options: approve/reject| U_BTN
 
-U_BTN -->|choice_wait: auto_retry| R_ACQ
+U_BTN -->|choice_wait: auto_retry| A_ACQ
 U_BTN -->|choice_cancel: cancel_current_job| JM_CANCEL
 U_BTN -->|choice_stop_other: cancel_conflict_job| JM_CANCEL_CONFLICT
-U_BTN -->|choice_approve: run_tool| R_EXEC
+U_BTN -->|choice_approve: run_tool| A_EXEC
 U_BTN -->|choice_reject: cancel_current_job| JM_CANCEL
 
 %% UI status updates
@@ -168,7 +171,7 @@ W_RUN -.->|event: running| U_BOARD
 W_DONE -.->|event: done_green_blink| U_BOARD
 W_FAIL -.->|event: fail_red_blink| U_BOARD
 W_CANC -.->|event: canceled_gray| U_BOARD
-R_EXEC -.->|log_stream| U_LOG
+A_EXEC -.->|log_stream| U_LOG
 ```
 
-> 참고: JobRunner 내부 흐름은 LangGraph를 고정 사용하여 그래프 노드/엣지로 모델링한다.
+> 참고: GeneralManager는 LangGraph로 구현한다. DeepAgent는 워커 내부 실행기이며, ToolRuntimeAdapter가 ToolBox 정책을 강제한다.

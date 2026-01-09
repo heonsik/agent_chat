@@ -1,205 +1,134 @@
 # 에이전트 세계관(역할/클래스) 정리 문서
 
-이 문서는 ‘가게’ 비유(현실 세계관)를 기반으로, 프로그램 구성 요소(클래스/컴포넌트)의 **역할, 책임, 상호작용**을 개발 관점에서 정리합니다.  
-핵심 목표는 “설계 의도를 누구나 같은 그림으로 이해”하는 것입니다.
+이 문서는 ‘가게’ 비유를 기반으로 프로그램 구성 요소의 역할, 책임, 상호작용을 개발 관점에서 정리합니다.
 
 ---
 
-## 0) 한 줄 요약
+## 0) 핵심 요약
 
-- **고객(사용자)**의 요청을 **총괄매니저(메인 스레드)**가 접수하고,  
-- **통역가(LLM)**에게 “맥락이 포함된 편지”로 해석/계획을 요청한 뒤,  
-- **서버들(워커 스레드)**이 **공구박스(툴 인벤토리)**에서 공구(툴)를 대여/실행하며 일을 끝까지 수행한다.  
-- 모든 진행상태는 **전광판(Dashboard)**에서 상시 표시되고, 승인 필요 시 **작업 패널**에서 승인/취소를 한다.
+- **총괄매니저(GeneralManager, LangGraph)**는 입력을 분기하고 Job을 생성/조회/취소하며 즉시 응답한다.
+- **딥에이전트(DeepAgent, Worker)**는 장시간 작업을 수행하고 툴 호출/판단/요약까지 책임진다.
+- **ToolRuntimeAdapter**가 DeepAgent의 툴 호출을 **ToolBox 정책(Acquire/Release, 승인, 그룹락)**으로 감싼다.
+- 모든 진행 상태는 **Dashboard/Job Panel**에서 실시간 표시되고, 승인/대기/취소/중단은 UI에서 처리한다.
 
 ---
 
-## 1) 캐릭터(클래스) 소개 및 책임
+## 1) 캐릭터/컴포넌트 역할과 책임
 
-### 1) 통역가 (Interpreter / LLM Service)
-**정의**: LLM 서비스. “편지(문자열)”로만 소통하며, 매 요청마다 맥락을 새로 주어야 한다.
+### 1) 딥에이전트 (DeepAgent / Worker)
+**정의**: Job을 받아 장시간 작업을 수행하는 워커. 내부에서 계획/툴선택/파라미터 구성/실행/요약을 수행한다.
 
-- 특징
-  - **상태 없음(stateless)**: 매 호출마다 역할에 맞는 **최소 컨텍스트**를 편지에 동봉
-  - 요청마다 “통역가”가 바뀔 수 있으므로 **핵심 요약/메모리**는 필수 포함
-  - 역할 분화 가능(전문 통역가)
-    - Planner(요청 해석/계획/투두 생성)
-    - Tool-Chooser(툴 선택/파라미터 구성)
-    - Summarizer(히스토리 요약/중요정보 추출·축출)
-    - Reporter(고객에게 보여줄 답변 작성)
-    - Solver(툴 없이 해결 가능한 단계 처리)
-
-- I/O 예시
-  - 입력(편지): system + role + 요약 히스토리/메모리 + (필요 시) tool specs + user request
-  - 출력: 계획(Plan), todo 리스트, tool call 스펙, 사용자 답변
+- 주요 책임
+  - 요청을 TODO로 분해하고 순차 처리
+  - 툴 호출 및 결과 요약
+  - 로그/근거를 JobManager에 전달
+- 정책
+  - ToolBox 사용 툴은 **순차 실행**을 보장
+  - 승인/락 인터럽트 시 즉시 대기
 
 ---
 
 ### 2) 고객 (Customer / User)
-**정의**: 외국인 고객. 프로그램이 고객의 언어를 직접 이해하지 못하므로 항상 통역가를 거친다.
+**정의**: 프로그램에 입력을 주고 결과를 받는 주체.
 
 - 특징
-  - 고객 입력 → (통역가) → 내부 실행 → (통역가) → 고객 출력
-  - 툴이 잠겼을 때(락/재고 부족) “대기/취소/중단” 의사를 UI로 결정
+  - 작업이 진행 중이어도 **추가 입력** 가능
+  - 승인/대기/취소/중단 선택은 UI에서 수행
 
 ---
 
-### 3) 총괄매니저 (General Manager / Main Thread)
-**정의**: 프로그램의 메인 스레드. 고객 입력을 접수하고 업무를 “계획/배차”한다.
+### 3) 총괄매니저 (GeneralManager / LangGraph)
+**정의**: 최상위 오케스트레이터. 입력을 분기하고 Job을 생성/조회/취소한다.
 
 - 주요 책임
-  - 고객 입력 수신 및 라우팅
-  - 컨텍스트 조립: system 지침 + history + (장/단기) 메모리 + 툴 설명서
-  - Provider를 통해 LLM I/O 형식을 정규화
-  - 통역가(Planner) 호출로:
-    - 요청을 구체화
-    - todo list 생성
-    - 즉시 답변 가능 여부 판단
-  - todo list가 생기면 JobManager에 **작업지시서(Job Ticket)** 제출
-  - **메인은 항상 입력대기**로 복귀(동시성 확보)
-
-- 핵심 원칙
-  - 메인은 “계획과 배차”가 주임무, “실행”은 서버(워커)가 담당
+  - 입력 분기: START/STATUS/CANCEL/RESULT/LIST
+  - JobManager에 작업지시서 제출
+  - 즉시 응답(블로킹 금지)
 
 ---
 
-### 4) 서버들 (Servers / Worker Threads, TodoExecutor)
-**정의**: 총괄매니저가 발급한 작업지시서(Job)를 받아 실제로 일을 한다. (todo executor)
+### 4) JobManager
+**정의**: Job 메타/상태/로그를 저장하고 WorkerPool로 배차한다.
 
 - 주요 책임
-  - todo list를 **순서대로** 실행(한 Job 안에서는 순차 진행)
-  - todo마다:
-    - 툴이 필요한지 판단(LLM 호출 가능)
-    - 필요하면 공구박스에서 공구(툴) 대여 후 실행
-    - 결과/로그/근거 저장(State/Evidence Update)
-  - 공구가 잠겨있거나 승인 필요하면:
-    - **사용자 확인 인터럽트**로 UI에 대기(노란 깜빡)
-    - 사용자 선택(대기/취소/중단)에 따라 재시도/종료/교체
-
-- 성능 우선 정책에서의 특징
-  - “정확한 실행”을 위해 LLM 호출을 더 적극적으로 사용 가능
-  - 결과 요약(근거화)도 LLM을 활용하여 사용자에게 이해 가능한 보고로 변환
+  - job_id 발급
+  - 상태 저장: queued/running/waiting_lock/waiting_confirm/done/failed/canceled
+  - 로그/진행률/결과 저장
 
 ---
 
-### 5) 프로그램 (agent_chat / Store UI)
-**정의**: 고객이 접하는 “가게” 그 자체. 채팅 + 전광판 + 작업 패널을 제공한다.
+### 5) WorkerPool + JobRunner
+**정의**: Job을 워커에게 전달하고 실행을 모니터링하는 실행기.
 
-- 주요 UI 구성
-  - Chat View: 고객 대화
-  - Dashboard(전광판): 워커/잡 상태 아이콘
-  - Job Panel(작업방): 특정 Job의 채팅/로그/승인 버튼
-  - Log Stream: 툴 로그 실시간 표시
-  - Confirm Controls: 승인/대기/취소/중단
-
-- 상태 표시 규칙(예시)
-  - 실행중: 기본 아이콘
-  - 승인대기: 노란색 깜빡
-  - 성공: 초록색 깜빡
-  - 실패: 빨간색 깜빡
+- WorkerPool: 동시 실행 워커 풀 관리
+- JobRunner: DeepAgent 실행/중단/상태 수집/로그 스트림
 
 ---
 
-### 6) 프로바이더 (Provider Adapter / 사투리 교정가)
-**정의**: LLM 서비스별 입출력 형식을 통일하는 어댑터.
+### 6) ToolRuntimeAdapter + ToolBox
+**정의**: DeepAgent의 툴 호출을 정책으로 감싸는 실행 계층.
 
-- 역할
-  - Prompt/Response 정규화
-  - JSON schema / tool-call 포맷 변환
-  - 다양한 LLM(통역가)이 있어도 내부 실행 파이프라인은 동일하도록 보장
-
-- 예시 API
-  - `NormalizePrompt(ctx) -> provider_prompt`
-  - `ParsePlan(llm_response) -> Plan`
-  - `ParseToolSpec(llm_response) -> ToolCallSpec`
-  - `NormalizeOutput(text) -> final_user_text`
+- ToolRuntimeAdapter
+  - Acquire/Release 강제
+  - confirmPolicy 및 lock 충돌 처리
+  - UI 인터럽트 발생 및 재개
+- ToolBox
+  - capacity/groupKey/confirmPolicy의 단일 소스
 
 ---
 
-### 7) 공구박스 (Toolbox / Inventory + Group Lock)
-**정의**: 툴(공구)들을 모아둔 인벤토리. 수량/그룹락/대여현황을 관리한다.
+### 7) 프로그램 UI (agent_chat / Store UI)
+**정의**: Chat + Dashboard + Job Panel로 상태/로그/승인을 표시.
 
-- 핵심 개념
-  - **툴 수량(capacity)**: SongTool(2)처럼 동시에 2개까지
-  - **무제한(infinite)**: WeatherTool처럼 락 없이 언제든 실행
-  - **그룹락(Group Lock / 모니터박스)**: 컨테이너 단위 상호배제
-    - 예: MonitorBox 안에 NavTool(1), MovieTool(1)
-    - NavTool을 대여하면 MonitorBox가 점유되어 MovieTool도 사용 불가(락 효과)
-
-- 동작 규칙
-  - 서버(워커)가 툴 실행 필요 → Toolbox.Acquire 요청
-  - Acquire 결과:
-    - acquired(대여 성공) → 실행 후 Release로 반납
-    - locked(점유중) → 사용자 확인 인터럽트(대기/취소/중단)로 처리
-
-- ToolSpec(사용 설명서)에 담길 정보(권장)
-  - 호출 매개변수 스키마, 결과 포맷
-  - capacity(수량), groupKey(그룹락 키), confirmPolicy(승인 필요 여부)
-  - 실행 특성(longtime 여부 등)
+- Chat View: 입력/응답
+- Dashboard: 워커/잡 상태 표시
+- Job Panel: 작업 로그/승인 버튼
 
 ---
 
-### 8) 전광판 (Dashboard / Status Board)
-**정의**: 어떤 서버(워커)가 어떤 일을 하고 있는지 상시 표시하는 UI 관제판.
-
-- 기능
-  - Job/Worker 상태 이벤트 수신
-  - 색상/깜빡임으로 상태 표현
-  - 아이콘 클릭 시 해당 Job Panel 오픈
-  - 승인 대기 시 사용자 행동을 유도(노랑)
+### 8) ProviderAdapter (선택)
+**정의**: LLM Provider 입출력 정규화. 필요 시 GM/Worker 모두에 적용.
 
 ---
 
 ## 2) 핵심 정책(세계관 규칙을 코드 정책으로)
 
-### 2.1 통역가 호출은 “편지” 단위
-- 모든 LLM 호출은 문자열 입력/출력
-- 매 호출마다 역할에 맞는 최소 컨텍스트 포함(요약/메모리/필요 툴 설명)
+### 2.1 GM은 블로킹하지 않는다
+- 긴 작업은 Job으로 제출하고 즉시 응답한다.
 
-### 2.2 메인은 절대 블로킹하지 않는다
-- todo가 생기면 Job으로 제출하고 바로 입력대기로 복귀
-- 실행은 워커가 담당(동시성)
+### 2.2 Job 내부는 순차 실행
+- TODO는 순서 보장
+- ToolBox가 연동된 툴 실행은 반드시 순차
 
-### 2.3 한 Job 안에서는 todo는 순차 실행
-- 특히 네비 완료 후 다음 행동처럼 “의존 순서”가 중요한 경우를 자연스럽게 지원
-
-### 2.4 공구 잠김(락/재고부족) 시 사용자 확인 인터럽트
-- 자동으로 다른 todo로 넘어가지 않고(순차 보장)
-- 사용자에게 대기/취소/중단 등 선택을 제공
+### 2.3 승인/락은 UI가 결정
+- 승인 필요: approve/reject
+- 락 충돌: wait/cancel/stop_other
 
 ---
 
-## 3) 예시 시나리오 (현실 세계관 그대로)
+## 3) 예시 시나리오
 
-### 시나리오 A: 네비 중에도 노래는 가능
-1) 고객: “목적지 A로 네비 켜줘”  
-2) 메인: Planner 호출 → todo 생성 → 서버1 Job 실행  
-3) 서버1: MonitorBox 대여 → NavTool 실행(그룹락 점유)  
-4) 고객: “노래 불러줘”  
-5) 메인: 새로운 Job 생성 → 서버2 실행  
-6) 서버2: SongTool(2) 중 1개 대여 → 노래 실행(동시 가능)  
-7) 전광판: 서버1(네비 실행중), 서버2(노래 실행중)
+### 시나리오 A: 네비 실행 중 노래 실행
+1) Job1: NavTool(모니터박스 점유) 실행
+2) Job2: SongTool 실행 (가능)
+3) Dashboard에서 두 Job 상태 동시 표시
 
-### 시나리오 B: 네비 중 영화는 충돌 → 사용자 선택
-1) 네비 실행 중(MonitorBox 점유)  
-2) 고객: “영화도 틀어줘”  
-3) 서버2: MovieTool 필요 → MonitorBox 잠김 → 사용자 확인 인터럽트  
-4) Job Panel에서 선택:
-   - 기다리기: 네비 종료까지 대기 후 MovieTool 실행
-   - 취소: 영화 Job 종료
-  - 중단(stop_other): 충돌 Job(네비, MonitorBox 점유) 취소 후 영화 실행
+### 시나리오 B: 네비 실행 중 영화 요청(충돌)
+1) MovieTool 필요
+2) MonitorBox가 점유되어 locked
+3) UI 선택: wait / cancel / stop_other
 
-### 시나리오 C: 노래툴 2개가 모두 사용 중일 때
-1) 서버2/서버3이 SongTool 2개 모두 사용 중  
-2) 고객: “노래 하나 더!”  
-3) 서버4: SongTool 재고 없음 → 사용자 확인 인터럽트(대기/취소)
+### 시나리오 C: SongTool 2개 모두 사용 중
+1) SongTool 재고 없음
+2) UI에서 wait/cancel 선택
 
 ---
 
-## 4) 관련 다이어그램 파일
+## 4) 관련 파일
 
 - 플로우차트(세계관 동작): `agent_world_flowchart_v3.md`
-- 클래스/상태머신(구조/상태): `agent_world_models_v2.md`
+- 구조/상태머신: `agent_world_models_v2.md`
+- 프로그램 설명서: `agent_world_program_spec_v4.md`
 
 ---
 

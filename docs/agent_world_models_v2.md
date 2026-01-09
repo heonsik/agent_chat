@@ -20,9 +20,9 @@ class Customer {
 
 class GeneralManager {
   +OnUserInput(text)
-  +BuildContext()
-  +CallPlanner()
-  +SubmitJob(todos)
+  +RouteIntent()
+  +CreateJob(request)
+  +ReplyImmediate()
 }
 
 class ProviderAdapter {
@@ -32,11 +32,11 @@ class ProviderAdapter {
   +NormalizeOutput(text)
 }
 
-class InterpreterLLM {
-  +Planner(ctx) Plan
-  +Solver(ctx) StepResult
-  +Summarizer(ctx) MemoryDelta
-  +Reporter(ctx) UserMessage
+class DeepAgent {
+  +PlanTodos(request)
+  +RunTodo(todo)
+  +CallTool(tool, params)
+  +Summarize(result)
 }
 
 class JobManager {
@@ -53,7 +53,15 @@ class WorkerPool {
 
 class JobRunner {
   +RunJob(job)
-  +ExecuteTodo(todo)
+  +RunDeepAgent(job)
+  +StreamLogs(jobId)
+}
+
+class ToolRuntimeAdapter {
+  +Acquire(toolKey, groupKey)
+  +ConfirmIfNeeded(toolKey)
+  +ExecuteTool(toolKey, params)
+  +Release(handle)
 }
 
 class ToolBox {
@@ -94,12 +102,14 @@ class DashboardBoard {
 Customer --> AgentChatUI
 AgentChatUI --> GeneralManager : user input
 GeneralManager --> ProviderAdapter
-GeneralManager --> InterpreterLLM : letters
+WorkerPool --> DeepAgent : assign worker
 GeneralManager --> JobManager : submit job
 
 JobManager --> WorkerPool
 WorkerPool --> JobRunner : assign job
-JobRunner --> ToolBox : acquire, release
+JobRunner --> DeepAgent : run
+DeepAgent --> ToolRuntimeAdapter : tool calls
+ToolRuntimeAdapter --> ToolBox : acquire, release
 ToolBox --> ToolSpec
 ToolBox --> ToolGroup
 ToolHandle --> Tool
@@ -116,69 +126,46 @@ stateDiagram-v2
 
 [*] --> Idle
 
-Idle --> Planning : user_input
-Planning --> AnswerNow : plan.answer_now
-Planning --> SubmitJob : plan.todos
+Idle --> Routing : user_input
+Routing --> StartJob : intent.start
+Routing --> Status : intent.status
+Routing --> Cancel : intent.cancel
+Routing --> Result : intent.result
+Routing --> List : intent.list
 
-AnswerNow --> Idle : reply_to_user
-SubmitJob --> Idle : job_submitted
+StartJob --> Idle : job_submitted
+Status --> Idle : reply_to_user
+Cancel --> Idle : reply_to_user
+Result --> Idle : reply_to_user
+List --> Idle : reply_to_user
 
 state WorkerJob {
-  [*] --> RunningTodo
-  RunningTodo --> PickTodo : next_todo
-  PickTodo --> Done : no_todo
-  PickTodo --> NeedTool : has_todo
-
-  NeedTool --> LlmSolve : no_tool_needed
-  LlmSolve --> UpdateState : save_result
-  UpdateState --> PickTodo
-
-  NeedTool --> ToolSelect : tool_needed
-  ToolSelect --> ToolParam : select_tool
-  ToolParam --> AcquireTool : build_params
-
-  AcquireTool --> ToolAvailable : acquired
-  AcquireTool --> ToolLocked : locked
-
-  ToolAvailable --> ConfirmCheck : maybe_confirm
-  ConfirmCheck --> ExecTool : no_confirm
-  ConfirmCheck --> WaitUser : need_confirm
-
-  WaitUser --> ExecTool : user_approve
-  WaitUser --> Canceled : user_reject
-
-  ToolLocked --> WaitUser : ask_wait_cancel_stop
-  ToolLocked --> WaitRetry : user_wait
-  WaitRetry --> AcquireTool : retry_same_todo
-  ToolLocked --> Canceled : user_cancel
-  ToolLocked --> Canceled : user_stop_other
-
-  ExecTool --> Evidence : need_evidence
-  ExecTool --> UpdateState : no_evidence
-  Evidence --> UpdateState : save_result
-  UpdateState --> ReleaseTool : release_if_needed
-  ReleaseTool --> PickTodo
-
+  [*] --> Queued
+  Queued --> Running : worker_start
+  Running --> WaitingConfirm : confirm_required
+  Running --> WaitingLock : tool_locked
+  WaitingConfirm --> Running : user_approve
+  WaitingConfirm --> Canceled : user_reject
+  WaitingLock --> Running : user_wait_or_retry
+  WaitingLock --> Canceled : user_cancel
+  WaitingLock --> Canceled : user_stop_other
+  Running --> Done : job_done
+  Running --> Failed : job_failed
+  Running --> Canceled : job_canceled
   Done --> [*]
+  Failed --> [*]
   Canceled --> [*]
 }
 
-state Planning {
-  [*] --> BuildContext
-  BuildContext --> CallPlanner
-  CallPlanner --> Decide
-  Decide --> [*]
-}
-
-note right of ToolLocked
+note right of WaitingLock
 busy means inventory or group lock is held.
 default policy: retry SAME TODO (order preserved).
 end note
 
-note right of WaitUser
+note right of WaitingConfirm
 UI shows yellow blink.
 click icon opens job panel for approve, cancel, stop.
 end note
 ```
 
-> 이 상태 그래프는 LangGraph를 고정 사용하여 구현하며, 노드별 LLM 호출은 ProviderAdapter로 분리한다.
+> GeneralManager는 LangGraph로 구현하며, DeepAgent는 워커 내부에서 장기 작업을 수행한다.
