@@ -45,6 +45,14 @@
 - **Solver**: 툴 없이 해결 가능한 TODO 처리
 - **Evidence/Reporter**: 실행 결과를 사용자에게 보여줄 형태로 요약/근거화
 
+#### 3.2.1) DeepAgent 내부 그래프(미들웨어 체인)
+- PatchToolCallsMiddleware.before_agent
+- SummarizationMiddleware.before_model
+- model
+- TodoListMiddleware.after_model
+- tools
+- tools 호출은 **ToolRuntimeAdapter -> ToolBox** 경유로 실행되며, 결과는 Summarization 단계로 회귀한다.
+
 > 원칙: LLM은 무상태이므로, 매 호출마다 **역할에 맞는 최소 컨텍스트**를 편지에 포함한다.
 
 ### 3.3) 프롬프트 조립 원칙 (역할별 최소 컨텍스트)

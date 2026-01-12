@@ -51,11 +51,16 @@ subgraph MAIN["GENERAL_MANAGER - 총괄매니저(LangGraph)"]
   M_REPLY["REPLY_USER<br/>즉시 응답"]:::main
 
   M_WAIT --> M_ROUTE
-  M_ROUTE -->|start| M_CREATE --> M_REPLY --> U_CHAT --> M_WAIT
-  M_ROUTE -->|status| M_STATUS --> M_REPLY --> U_CHAT --> M_WAIT
-  M_ROUTE -->|cancel| M_CANCEL --> M_REPLY --> U_CHAT --> M_WAIT
-  M_ROUTE -->|result| M_RESULT --> M_REPLY --> U_CHAT --> M_WAIT
-  M_ROUTE -->|list| M_REPLY --> U_CHAT --> M_WAIT
+  M_ROUTE -->|start| M_CREATE
+  M_ROUTE -->|status| M_STATUS
+  M_ROUTE -->|cancel| M_CANCEL
+  M_ROUTE -->|result| M_RESULT
+  M_ROUTE -->|list| M_REPLY
+  M_CREATE --> M_REPLY
+  M_STATUS --> M_REPLY
+  M_CANCEL --> M_REPLY
+  M_RESULT --> M_REPLY
+  M_REPLY --> U_CHAT
 end
 
 U_CHAT --> M_WAIT
@@ -66,11 +71,16 @@ U_CHAT --> M_WAIT
 subgraph JM["JOB_MANAGER - 작업표, 배차, 취소"]
   JM_IN["SUBMIT_IN<br/>작업지시서 수신"]:::main --> JM_CREATE["CREATE_JOB<br/>job_id 생성"]:::main
   JM_CREATE --> JM_QUEUE["JOB_QUEUE<br/>대기열"]:::main
+  JM_READ_STATUS["READ_STATUS<br/>상태 조회"]:::main
+  JM_READ_RESULT["READ_RESULT<br/>결과 조회"]:::main
   JM_CANCEL["CANCEL_JOB<br/>현재 Job 취소"]:::danger
   JM_CANCEL_CONFLICT["CANCEL_CONFLICT_JOB<br/>충돌 Job 취소"]:::danger
 end
 
-M_SUBMIT --> JM_IN
+M_CREATE --> JM_IN
+M_STATUS --> JM_READ_STATUS
+M_RESULT --> JM_READ_RESULT
+M_CANCEL --> JM_CANCEL
 
 %% =========================
 %% SERVERS (워커 풀)
@@ -105,22 +115,20 @@ subgraph TBX["TOOLBOX - 공구박스(재고, 수량, 그룹락)"]
 end
 
 %% =========================
-%% DEEP AGENT (Worker 내부)
+%% DEEP AGENT (Worker 내부, 미들웨어 포함)
 %% =========================
 subgraph DA["DEEP_AGENT - 워커 내부 실행"]
-  D_PLAN["PLAN/TODO<br/>작업 분해"]:::llm
-  D_STEP["STEP_LOOP<br/>todo 순차 처리"]:::worker
-  D_NEED{"NEED_TOOL?<br/>툴 필요"}:::decision
-  D_SOLVE["LLM_SOLVER<br/>툴 없이 해결"]:::llm
-  D_TOOL["CALL_TOOL<br/>툴 호출"]:::tool
-  D_EVI{"NEED_EVIDENCE?<br/>근거 필요"}:::decision
-  D_REPORT["LLM_EVIDENCE<br/>결과 요약"]:::llm
+  D_START["__start__"]:::worker
+  D_PATCH["PatchToolCallsMiddleware.before_agent"]:::worker
+  D_SUMM["SummarizationMiddleware.before_model"]:::worker
+  D_MODEL["model"]:::llm
+  D_TODO["TodoListMiddleware.after_model"]:::worker
+  D_TOOLS["tools"]:::tool
+  D_END["__end__"]:::worker
 
-  D_PLAN --> D_STEP --> D_NEED
-  D_NEED -->|no| D_SOLVE --> D_STEP
-  D_NEED -->|yes| D_TOOL --> D_EVI
-  D_EVI -->|yes| D_REPORT --> D_STEP
-  D_EVI -->|no| D_STEP
+  D_START --> D_PATCH --> D_SUMM --> D_MODEL --> D_TODO --> D_END
+  D_TODO -.-> D_TOOLS
+  D_TOOLS -.-> D_SUMM
 end
 
 %% =========================
@@ -142,8 +150,8 @@ subgraph TRA["TOOL_RUNTIME_ADAPTER - 정책 강제"]
   A_CONFIRM -->|yes| A_WAIT_CONFIRM
 end
 
-W_RUN --> D_PLAN
-D_TOOL --> A_ACQ
+W_RUN --> D_START
+D_TOOLS --> A_ACQ
 
 %% Toolbox wiring
 A_ACQ --> T_ACQ --> T_INV

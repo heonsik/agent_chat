@@ -25,6 +25,8 @@
 - 정책
   - ToolBox 사용 툴은 **순차 실행**을 보장
   - 승인/락 인터럽트 시 즉시 대기
+  - 내부 그래프는 미들웨어 체인(PatchToolCalls/Summarization/TodoList + tools)로 동작
+  - tools 호출은 ToolRuntimeAdapter를 통해 ToolBox 정책을 적용
 
 ---
 

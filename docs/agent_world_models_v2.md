@@ -33,8 +33,8 @@ class ProviderAdapter {
 }
 
 class DeepAgent {
-  +PlanTodos(request)
-  +RunTodo(todo)
+  +Invoke(planOrTodo)
+  +RunGraph()
   +CallTool(tool, params)
   +Summarize(result)
 }
@@ -118,6 +118,8 @@ AgentChatUI --> DashboardBoard
 note for ToolGroup "MonitorBox\n- shared lock for NavTool, MovieTool\n- capacity=1"
 note for ToolSpec "Examples\n- NavTool: groupKey=MonitorBox, capacity=1\n- MovieTool: groupKey=MonitorBox, capacity=1\n- SongTool: groupKey=SongPool, capacity=2\n- WeatherTool: capacity=infinite, no lock"
 ```
+
+> DeepAgent 내부 그래프는 미들웨어 체인(PatchToolCalls -> Summarization -> model -> TodoList -> tools)로 동작하며, tools 호출은 ToolRuntimeAdapter를 통해 ToolBox를 확인한다.
 
 ## 2) 상태 머신(WorkerJob)
 
