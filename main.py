@@ -373,6 +373,25 @@ class MainWindow(QMainWindow):
         self.ui.btn_cancel.setEnabled(True)
         self.ui.btn_cancel.clicked.connect(handle_cancel)
 
+        def handle_approve():
+            if not getattr(self, "_active_job_id", None):
+                self.ui.chat_log.appendPlainText("GM: job_id required")
+                return
+            self.world.approve_job(self._active_job_id)
+            self.ui.chat_log.appendPlainText("GM: approved")
+
+        def handle_reject():
+            if not getattr(self, "_active_job_id", None):
+                self.ui.chat_log.appendPlainText("GM: job_id required")
+                return
+            self.world.reject_job(self._active_job_id)
+            self.ui.chat_log.appendPlainText("GM: rejected")
+
+        self.ui.btn_approve.setEnabled(True)
+        self.ui.btn_reject.setEnabled(True)
+        self.ui.btn_approve.clicked.connect(handle_approve)
+        self.ui.btn_reject.clicked.connect(handle_reject)
+
     def _extract_todos(self, text: str):
         lower = text.strip().lower()
         if lower.startswith("start "):

@@ -16,7 +16,7 @@ class ToolRuntimeResult:
 class ToolRuntimeAdapter:
     """Adapter interface for tool execution with inventory/confirm policies."""
 
-    def run(self, todo: Dict[str, Any]) -> ToolRuntimeResult:
+    def run(self, todo: Dict[str, Any], skip_confirm: bool = False) -> ToolRuntimeResult:
         raise NotImplementedError
 
     def acquire(self, tool_key: str, group_key: Optional[str]) -> ToolRuntimeResult:
@@ -38,13 +38,14 @@ class InventoryToolRuntimeAdapter(ToolRuntimeAdapter):
         self._runtime = runtime
         self._specs = specs
 
-    def run(self, todo: Dict[str, Any]) -> ToolRuntimeResult:
+    def run(self, todo: Dict[str, Any], skip_confirm: bool = False) -> ToolRuntimeResult:
         tool_key = todo.get("tool")
         if not tool_key:
             return ToolRuntimeResult(state="done", result=todo.get("result"))
-        confirm = self.confirm_if_needed(tool_key)
-        if confirm.state == "waiting_confirm":
-            return confirm
+        if not skip_confirm:
+            confirm = self.confirm_if_needed(tool_key)
+            if confirm.state == "waiting_confirm":
+                return confirm
         acquire = self.acquire(tool_key, None)
         if acquire.state != "acquired":
             return acquire

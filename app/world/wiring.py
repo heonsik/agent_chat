@@ -58,3 +58,9 @@ class WorldWiring:
         job = self.job_manager.create_job(request_text)
         self.job_manager.dispatch(job.job_id, todos)
         return job.job_id
+
+    def approve_job(self, job_id: str) -> None:
+        self.job_runner.resume_confirm(job_id, approved=True)
+
+    def reject_job(self, job_id: str) -> None:
+        self.job_runner.resume_confirm(job_id, approved=False)
