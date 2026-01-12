@@ -6,12 +6,18 @@ from uuid import uuid4
 
 from app.world.events import EventBus
 from app.world.types import JobRecord, JobState
+from app.world.worker_pool import WorkerPool
 
 
 class JobManager:
-    def __init__(self, event_bus: Optional[EventBus] = None) -> None:
+    def __init__(
+        self,
+        event_bus: Optional[EventBus] = None,
+        worker_pool: Optional[WorkerPool] = None,
+    ) -> None:
         self._jobs: Dict[str, JobRecord] = {}
         self._event_bus = event_bus
+        self._worker_pool = worker_pool
 
     def create_job(self, request_text: Optional[str], metadata: Optional[Dict[str, Any]] = None) -> JobRecord:
         job_id = uuid4().hex
@@ -24,6 +30,15 @@ class JobManager:
         self._jobs[job_id] = job
         self._publish("job_created", job)
         return job
+
+    def dispatch(self, job_id: str, todos: List[Dict[str, Any]]) -> bool:
+        if self._worker_pool is None:
+            return False
+        if job_id not in self._jobs:
+            return False
+        self._worker_pool.submit(job_id, todos)
+        self._publish("job_queued", self._jobs[job_id])
+        return True
 
     def get_job(self, job_id: str) -> Optional[JobRecord]:
         return self._jobs.get(job_id)
@@ -60,14 +75,22 @@ class JobManager:
         self._publish("job_log", job)
         return True
 
-    def set_result(self, job_id: str, result: Dict[str, Any]) -> bool:
+    def set_result(
+        self,
+        job_id: str,
+        result: Dict[str, Any],
+        state: JobState = JobState.DONE,
+    ) -> bool:
         job = self._jobs.get(job_id)
         if job is None:
             return False
         job.result = result
-        job.state = JobState.DONE
+        job.state = state
         job.updated_at = datetime.utcnow()
-        self._publish("job_done", job)
+        if state == JobState.DONE:
+            self._publish("job_done", job)
+        elif state == JobState.FAILED:
+            self._publish("job_failed", job)
         return True
 
     def _publish(self, event_type: str, job: JobRecord) -> None:

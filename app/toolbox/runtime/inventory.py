@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import threading
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
@@ -45,6 +46,7 @@ class Inventory:
         self._tool_use: Dict[str, int] = {}
         self._group_use: Dict[str, int] = {}
         self._leases: Dict[str, ToolHandle] = {}
+        self._lock = threading.Lock()
         self._init_caps()
 
     def _init_caps(self) -> None:
@@ -65,31 +67,37 @@ class Inventory:
                 self._group_use.setdefault(group_key, 0)
 
     def acquire(self, tool_key: str) -> AcquireResult:
-        if tool_key not in self._specs:
-            raise KeyError(f"Unknown tool: {tool_key}")
-        spec = self._specs[tool_key]
-        group_key = spec.get("groupKey")
-        if not self._has_capacity(tool_key, group_key):
-            return AcquireResult(status="locked", handle=None, reason="capacity")
-        lease_id = uuid4().hex
-        handle = ToolHandle(tool_key=tool_key, group_key=group_key, lease_id=lease_id)
-        self._leases[lease_id] = handle
-        self._tool_use[tool_key] += 1
-        if group_key:
-            self._group_use[group_key] += 1
-        return AcquireResult(status="acquired", handle=handle, reason=None)
+        with self._lock:
+            if tool_key not in self._specs:
+                raise KeyError(f"Unknown tool: {tool_key}")
+            spec = self._specs[tool_key]
+            group_key = spec.get("groupKey")
+            if not self._has_capacity(tool_key, group_key):
+                return AcquireResult(status="locked", handle=None, reason="capacity")
+            lease_id = uuid4().hex
+            handle = ToolHandle(
+                tool_key=tool_key,
+                group_key=group_key,
+                lease_id=lease_id,
+            )
+            self._leases[lease_id] = handle
+            self._tool_use[tool_key] += 1
+            if group_key:
+                self._group_use[group_key] += 1
+            return AcquireResult(status="acquired", handle=handle, reason=None)
 
     def release(self, handle: ToolHandle) -> None:
         if handle is None:
             return
-        lease = self._leases.pop(handle.lease_id, None)
-        if lease is None:
-            return
-        self._tool_use[lease.tool_key] = max(0, self._tool_use[lease.tool_key] - 1)
-        if lease.group_key:
-            self._group_use[lease.group_key] = max(
-                0, self._group_use[lease.group_key] - 1
-            )
+        with self._lock:
+            lease = self._leases.pop(handle.lease_id, None)
+            if lease is None:
+                return
+            self._tool_use[lease.tool_key] = max(0, self._tool_use[lease.tool_key] - 1)
+            if lease.group_key:
+                self._group_use[lease.group_key] = max(
+                    0, self._group_use[lease.group_key] - 1
+                )
 
     def _has_capacity(self, tool_key: str, group_key: Optional[str]) -> bool:
         tool_cap = self._tool_caps.get(tool_key)
