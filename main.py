@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
         UIFunctions.uiDefinitions(self)
         self._setup_agent_ui()
         self._setup_world_wiring()
+        self._bind_chat_input()
 
         # QTableWidget PARAMETERS
         # ///////////////////////////////////////////////////////////////
@@ -340,10 +341,45 @@ class MainWindow(QMainWindow):
 
     def _setup_world_wiring(self):
         specs_path = os.path.join("app", "toolbox", "specs", "tools.yaml")
-        self.world = WorldWiring(specs_path=specs_path, adapters={})
+        self.world = WorldWiring(specs_path=specs_path)
         self.world.start_workers()
         self.gm = GeneralManager(self.world)
         self._bind_event_bus()
+
+    def _bind_chat_input(self):
+        def handle_send():
+            text = self.ui.chat_input.text().strip()
+            if not text:
+                return
+            self.ui.chat_input.clear()
+            self.ui.chat_log.appendPlainText(f"USER: {text}")
+            todos = self._extract_todos(text)
+            response = self.gm.handle(text, todos=todos)
+            self.ui.chat_log.appendPlainText(f"GM: {response.text}")
+            if response.job_id:
+                self._active_job_id = response.job_id
+                self.ui.job_chat.appendPlainText(f"job_id={response.job_id}")
+
+        self.ui.chat_send.clicked.connect(handle_send)
+        self.ui.chat_input.returnPressed.connect(handle_send)
+
+        def handle_cancel():
+            if not getattr(self, "_active_job_id", None):
+                self.ui.chat_log.appendPlainText("GM: job_id required")
+                return
+            response = self.gm.handle(f"cancel {self._active_job_id}")
+            self.ui.chat_log.appendPlainText(f"GM: {response.text}")
+
+        self.ui.btn_cancel.setEnabled(True)
+        self.ui.btn_cancel.clicked.connect(handle_cancel)
+
+    def _extract_todos(self, text: str):
+        lower = text.strip().lower()
+        if lower.startswith("start "):
+            parts = text.split(maxsplit=1)
+            if len(parts) == 2 and parts[1]:
+                return [{"tool": parts[1].strip(), "args": {}}]
+        return None
 
     def _bind_event_bus(self):
         def on_job_state(payload):

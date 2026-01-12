@@ -23,6 +23,10 @@ class JobRunner:
     def run_job(self, job_id: str, todos: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
         self._job_manager.update_state(job_id, JobState.RUNNING)
         for index, todo in enumerate(todos):
+            if self._job_manager.is_canceled(job_id):
+                self._job_manager.append_log(job_id, f"todo[{index}] canceled")
+                self._job_manager.update_state(job_id, JobState.CANCELED)
+                return {"status": "canceled"}
             result = run_single_todo(todo, self._adapter)
             status = result.state
             if status == "waiting_lock":

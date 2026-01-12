@@ -4,6 +4,7 @@ from pathlib import Path
 from threading import Event, Thread
 from typing import Any, Dict
 
+from app.toolbox.adapters import LocalAdapter, McpAdapter, SkillsAdapter
 from app.toolbox.runtime.inventory import Inventory
 from app.toolbox.runtime.registry import load_specs
 from app.toolbox.runtime.router import ToolRuntime
@@ -15,9 +16,13 @@ from app.world.worker_pool import WorkerPool
 
 
 class WorldWiring:
-    def __init__(self, specs_path: str | Path, adapters: Dict[str, Any]) -> None:
+    def __init__(self, specs_path: str | Path, adapters: Dict[str, Any] | None = None) -> None:
         self._specs_path = Path(specs_path)
-        self._adapters = adapters
+        self._adapters = adapters or {
+            "local": LocalAdapter(),
+            "mcp": McpAdapter(),
+            "skills": SkillsAdapter(),
+        }
         self.event_bus = EventBus()
         self._stop_event = Event()
         self._worker_thread: Thread | None = None
@@ -25,7 +30,7 @@ class WorldWiring:
         registry = load_specs(self._specs_path)
         specs_dict = {key: spec.spec for key, spec in registry.items()}
         self.inventory = Inventory(specs_dict)
-        self.runtime = ToolRuntime(registry, adapters)
+        self.runtime = ToolRuntime(registry, self._adapters)
         self.tool_adapter = InventoryToolRuntimeAdapter(self.inventory, self.runtime, specs_dict)
 
         self.job_manager = JobManager(event_bus=self.event_bus)

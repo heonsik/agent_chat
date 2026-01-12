@@ -46,6 +46,12 @@ class JobManager:
     def get_job(self, job_id: str) -> Optional[JobRecord]:
         return self._jobs.get(job_id)
 
+    def is_canceled(self, job_id: str) -> bool:
+        job = self._jobs.get(job_id)
+        if job is None:
+            return False
+        return job.state == JobState.CANCELED
+
     def list_jobs(self) -> List[JobRecord]:
         return list(self._jobs.values())
 
