@@ -126,21 +126,6 @@ note for ToolSpec "Examples\n- NavTool: groupKey=MonitorBox, capacity=1\n- Movie
 ```mermaid
 stateDiagram-v2
 
-[*] --> Idle
-
-Idle --> Routing : user_input
-Routing --> StartJob : intent.start
-Routing --> Status : intent.status
-Routing --> Cancel : intent.cancel
-Routing --> Result : intent.result
-Routing --> List : intent.list
-
-StartJob --> Idle : job_submitted
-Status --> Idle : reply_to_user
-Cancel --> Idle : reply_to_user
-Result --> Idle : reply_to_user
-List --> Idle : reply_to_user
-
 state WorkerJob {
   [*] --> Queued
   Queued --> Running : worker_start
@@ -168,6 +153,29 @@ note right of WaitingConfirm
 UI shows yellow blink.
 click icon opens job panel for approve, cancel, stop.
 end note
+
+note right of Running
+ToolRuntimeAdapter emits tool_locked/confirm_required.
+Worker waits until UI decision is received.
+end note
 ```
 
 > GeneralManager는 LangGraph로 구현하며, DeepAgent는 워커 내부에서 장기 작업을 수행한다.
+
+## 3) GM 라우팅 그래프 (Mermaid)
+
+```mermaid
+flowchart TB
+  GM_START["WAIT_INPUT"] --> GM_ROUTE{"INTENT_ROUTE"}
+  GM_ROUTE -->|start| GM_CREATE["JOB_CREATE"]
+  GM_ROUTE -->|status| GM_STATUS["JOB_STATUS_READ"]
+  GM_ROUTE -->|cancel| GM_CANCEL["JOB_CANCEL"]
+  GM_ROUTE -->|result| GM_RESULT["JOB_RESULT_READ"]
+  GM_ROUTE -->|list| GM_LIST["JOB_LIST"]
+  GM_CREATE --> GM_REPLY["REPLY_USER"]
+  GM_STATUS --> GM_REPLY
+  GM_CANCEL --> GM_REPLY
+  GM_RESULT --> GM_REPLY
+  GM_LIST --> GM_REPLY
+  GM_REPLY --> GM_START
+```

@@ -141,6 +141,27 @@
   - ToolRuntimeAdapter가 **승인 인터럽트**를 발생시키고 DeepAgent를 일시 중단한다.
   - 승인/거부 결과에 따라 실행/취소로 분기한다.
 
+### 5.4 ToolRuntimeAdapter 인터페이스 계약(요약)
+
+**입력**
+- `job_id`, `todo_id`
+- `tool_key`, `group_key`
+- `params`
+
+**출력**
+- `state`: running | waiting_lock | waiting_confirm | done | failed | canceled
+- `result`: tool result (success 시)
+- `error`: error summary (failure 시)
+
+**이벤트**
+- `waiting_lock`: 재고/그룹락 부족
+- `waiting_confirm`: 사용자 승인 필요
+- `log_stream`: 실행 로그 스트림
+
+**정책**
+- `Acquire -> Execute -> Release` 강제
+- 승인/락 발생 시 UI 인터럽트로 전환
+
 ---
 
 ## 6) UI
