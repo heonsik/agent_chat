@@ -1,6 +1,6 @@
 # 구현 계획 (Draft)
 
-이 문서는 현재 문서 구조(GM LangGraph + DeepAgent Worker + ToolRuntimeAdapter)를 기준으로 구현 순서를 정리한다.
+이 문서는 GM LangGraph + DeepAgent Worker + ToolRuntimeAdapter 구조를 기준으로 구현 순서를 정리한다.
 
 ---
 
@@ -13,6 +13,10 @@
 ---
 
 ## 1) 1단계: 기본 런타임 골격
+
+### 참고 문서
+- `agent_world_models_v2.md` (상태/클래스 구조)
+- `agent_world_program_spec_v4.md` (컴포넌트 책임)
 
 ### 상세 작업 리스트
 - 폴더 생성: `app/world/`, `app/world/gm/`, `app/world/worker/`
@@ -30,6 +34,10 @@
 
 ## 2) 2단계: ToolRuntimeAdapter MVP
 
+### 참고 문서
+- `tool_runtime_adapter_spec.md` (상세 계약)
+- `agent_world_program_spec_v4.md` (ToolBox 정책)
+
 ### 상세 작업 리스트
 - Adapter 클래스 스켈레톤
   - `acquire`, `confirm_if_needed`, `execute_tool`, `release`
@@ -45,6 +53,10 @@
 
 ## 3) 3단계: GM LangGraph 라우팅
 
+### 참고 문서
+- `agent_world_flowchart_v3.md` (GM 라우팅 구성)
+- `agent_world_models_v2.md` (GM 라우팅 그래프)
+
 ### 상세 작업 리스트
 - 라우팅 그래프 노드 작성
   - `intent_route`
@@ -57,6 +69,10 @@
 ---
 
 ## 4) 4단계: WorkerPool + JobRunner
+
+### 참고 문서
+- `agent_world_program_spec_v4.md` (컴포넌트 책임)
+- `agent_world_models_v2.md` (관계도)
 
 ### 상세 작업 리스트
 - WorkerPool 스케줄링 정책
@@ -71,6 +87,10 @@
 
 ## 5) 5단계: DeepAgent 통합
 
+### 참고 문서
+- `agent_world_roles_v4.md` (DeepAgent 책임)
+- `agent_world_program_spec_v4.md` (미들웨어 체인)
+
 ### 상세 작업 리스트
 - DeepAgent 래퍼 정의
   - 입력: `plan/todo`
@@ -84,6 +104,10 @@
 
 ## 6) 6단계: UI 연결 강화
 
+### 참고 문서
+- `agent_world_flowchart_v3.md` (UI 컴포넌트, 인터럽트)
+- `agent_world_program_spec_v4.md` (Dashboard/Panel 동작)
+
 ### 상세 작업 리스트
 - Dashboard 상태 반영
   - RUNNING/WAITING_LOCK/WAITING_CONFIRM
@@ -95,6 +119,9 @@
 ---
 
 ## 7) 테스트/검증 시나리오
+
+### 참고 문서
+- `agent_world_program_spec_v4.md` (예시 시나리오)
 
 ### 상세 작업 리스트
 - 락 충돌 시나리오 재현 스크립트
