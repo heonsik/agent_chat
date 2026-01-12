@@ -112,8 +112,8 @@ class MainWindow(QMainWindow):
         widgets.btn_home.setStyleSheet(UIFunctions.selectMenu(widgets.btn_home.styleSheet()))
         widgets.btn_home.setText("Chat")
         widgets.btn_widgets.setText("Jobs")
-        widgets.btn_new.setText("Workers")
-        widgets.btn_save.setText("Logs")
+        widgets.btn_new.setText("Result")
+        widgets.btn_save.setText("Status")
 
 
     # BUTTONS CLICK
@@ -392,12 +392,38 @@ class MainWindow(QMainWindow):
         self.ui.btn_approve.clicked.connect(handle_approve)
         self.ui.btn_reject.clicked.connect(handle_reject)
 
+        def handle_status():
+            if not getattr(self, "_active_job_id", None):
+                self.ui.chat_log.appendPlainText("GM: job_id required")
+                return
+            response = self.gm.handle(f"status {self._active_job_id}")
+            self.ui.chat_log.appendPlainText(f"GM: {response.text}")
+
+        def handle_result():
+            if not getattr(self, "_active_job_id", None):
+                self.ui.chat_log.appendPlainText("GM: job_id required")
+                return
+            response = self.gm.handle(f"result {self._active_job_id}")
+            self.ui.chat_log.appendPlainText(f"GM: {response.text}")
+
+        self.ui.btn_save.clicked.disconnect()
+        self.ui.btn_save.clicked.connect(handle_status)
+
+        self.ui.btn_new.clicked.disconnect()
+        self.ui.btn_new.clicked.connect(handle_result)
+
     def _extract_todos(self, text: str):
         lower = text.strip().lower()
         if lower.startswith("start "):
-            parts = text.split(maxsplit=1)
-            if len(parts) == 2 and parts[1]:
-                return [{"tool": parts[1].strip(), "args": {}}]
+            parts = text.split()
+            if len(parts) >= 2:
+                tool_key = parts[1].strip()
+                args = {}
+                for token in parts[2:]:
+                    if "=" in token:
+                        key, value = token.split("=", 1)
+                        args[key.strip()] = value.strip()
+                return [{"tool": tool_key, "args": args}]
         return None
 
     def _bind_event_bus(self):
@@ -421,10 +447,18 @@ class MainWindow(QMainWindow):
         def on_job_done(payload):
             worker_id = payload.get("job_id", "job")
             set_worker_status(self.ui, {worker_id: "done"})
+            result = payload.get("result")
+            if result is not None:
+                self.ui.job_chat.appendPlainText(f"result={result}")
+                self.ui.chat_log.appendPlainText(f"GM: result={result}")
 
         def on_job_failed(payload):
             worker_id = payload.get("job_id", "job")
             set_worker_status(self.ui, {worker_id: "failed"})
+            result = payload.get("result")
+            if result is not None:
+                self.ui.job_chat.appendPlainText(f"failed={result}")
+                self.ui.chat_log.appendPlainText(f"GM: failed={result}")
 
         self.world.event_bus.subscribe("job_state", on_job_state)
         self.world.event_bus.subscribe("job_log", on_job_log)
