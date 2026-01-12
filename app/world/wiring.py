@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event, Thread
 from typing import Any, Dict
 
 from app.toolbox.runtime.inventory import Inventory
@@ -18,6 +19,8 @@ class WorldWiring:
         self._specs_path = Path(specs_path)
         self._adapters = adapters
         self.event_bus = EventBus()
+        self._stop_event = Event()
+        self._worker_thread: Thread | None = None
 
         registry = load_specs(self._specs_path)
         specs_dict = {key: spec.spec for key, spec in registry.items()}
@@ -29,6 +32,22 @@ class WorldWiring:
         self.job_runner = JobRunner(self.job_manager, self.tool_adapter)
         self.worker_pool = WorkerPool(self.job_runner)
         self.job_manager.set_worker_pool(self.worker_pool)
+
+    def start_workers(self) -> None:
+        if self._worker_thread and self._worker_thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._worker_thread = Thread(
+            target=self.worker_pool.run_loop,
+            args=(self._stop_event.is_set,),
+            daemon=True,
+        )
+        self._worker_thread.start()
+
+    def stop_workers(self) -> None:
+        self._stop_event.set()
+        if self._worker_thread:
+            self._worker_thread.join(timeout=1.0)
 
     def submit_job(self, request_text: str, todos: list[dict[str, Any]]) -> str:
         job = self.job_manager.create_job(request_text)

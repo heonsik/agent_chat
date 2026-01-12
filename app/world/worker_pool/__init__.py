@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Deque, Dict, Iterable, List, Optional
+import time
+from typing import Any, Callable, Deque, Dict, Iterable, List, Optional
 
 from app.world.job_runner import JobRunner
 
@@ -32,6 +33,13 @@ class WorkerPool:
             if result is not None:
                 results.append(result)
         return results
+
+    def run_loop(self, stop_flag: Callable[[], bool], idle_sleep_s: float = 0.05) -> None:
+        while not stop_flag():
+            result = self.run_next()
+            if result is None:
+                time.sleep(idle_sleep_s)
+                continue
 
 
 __all__ = ["WorkerPool"]

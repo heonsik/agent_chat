@@ -21,6 +21,8 @@ import platform
 # IMPORT / GUI AND MODULES AND WIDGETS
 # ///////////////////////////////////////////////////////////////
 from app.ui.bindings import set_confirm_state, set_worker_status
+from app.world.general_manager import GeneralManager
+from app.world.wiring import WorldWiring
 from app.ui_vendor.modules import *
 from app.ui_vendor.widgets import *
 os.environ["QT_FONT_DPI"] = "96" # FIX Problem for High DPI and Scale above 100%
@@ -60,6 +62,7 @@ class MainWindow(QMainWindow):
         # ///////////////////////////////////////////////////////////////
         UIFunctions.uiDefinitions(self)
         self._setup_agent_ui()
+        self._setup_world_wiring()
 
         # QTableWidget PARAMETERS
         # ///////////////////////////////////////////////////////////////
@@ -342,6 +345,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(left_sidebar)
         layout.addWidget(splitter, 1)
         layout.addWidget(dashboard_panel)
+
+    def _setup_world_wiring(self):
+        specs_path = os.path.join("app", "toolbox", "specs", "tools.yaml")
+        self.world = WorldWiring(specs_path=specs_path, adapters={})
+        self.world.start_workers()
+        self.gm = GeneralManager(self.world)
 
 
     # RESIZE EVENTS
