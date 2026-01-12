@@ -162,6 +162,8 @@
 - `Acquire -> Execute -> Release` 강제
 - 승인/락 발생 시 UI 인터럽트로 전환
 
+상세 계약은 `tool_runtime_adapter_spec.md` 참고.
+
 ---
 
 ## 6) UI

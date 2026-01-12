@@ -182,4 +182,22 @@ W_CANC -.->|event: canceled_gray| U_BOARD
 A_EXEC -.->|log_stream| U_LOG
 ```
 
+## GM 라우팅 노드 구성도 (Mermaid)
+
+```mermaid
+flowchart TB
+  GM_START["WAIT_INPUT"] --> GM_ROUTE{"INTENT_ROUTE"}
+  GM_ROUTE -->|start| GM_CREATE["JOB_CREATE"]
+  GM_ROUTE -->|status| GM_STATUS["JOB_STATUS_READ"]
+  GM_ROUTE -->|cancel| GM_CANCEL["JOB_CANCEL"]
+  GM_ROUTE -->|result| GM_RESULT["JOB_RESULT_READ"]
+  GM_ROUTE -->|list| GM_LIST["JOB_LIST"]
+  GM_CREATE --> GM_REPLY["REPLY_USER"]
+  GM_STATUS --> GM_REPLY
+  GM_CANCEL --> GM_REPLY
+  GM_RESULT --> GM_REPLY
+  GM_LIST --> GM_REPLY
+  GM_REPLY --> GM_START
+```
+
 > 참고: GeneralManager는 LangGraph로 구현한다. DeepAgent는 워커 내부 실행기이며, ToolRuntimeAdapter가 ToolBox 정책을 강제한다.
