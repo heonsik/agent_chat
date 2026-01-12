@@ -19,6 +19,9 @@ class JobManager:
         self._event_bus = event_bus
         self._worker_pool = worker_pool
 
+    def set_worker_pool(self, worker_pool: WorkerPool) -> None:
+        self._worker_pool = worker_pool
+
     def create_job(self, request_text: Optional[str], metadata: Optional[Dict[str, Any]] = None) -> JobRecord:
         job_id = uuid4().hex
         job = JobRecord(
