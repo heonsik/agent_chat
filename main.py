@@ -332,15 +332,7 @@ class MainWindow(QMainWindow):
         self.ui.options_panel = options_panel
         self.ui.left_sidebar = left_sidebar
 
-        set_worker_status(
-            self.ui,
-            {
-                "worker-1": "running",
-                "worker-2": "waiting_confirm",
-                "worker-3": "idle",
-            },
-        )
-        set_confirm_state(self.ui, "lock")
+        set_confirm_state(self.ui, "idle")
 
         layout.addWidget(left_sidebar)
         layout.addWidget(splitter, 1)
@@ -351,6 +343,38 @@ class MainWindow(QMainWindow):
         self.world = WorldWiring(specs_path=specs_path, adapters={})
         self.world.start_workers()
         self.gm = GeneralManager(self.world)
+        self._bind_event_bus()
+
+    def _bind_event_bus(self):
+        def on_job_state(payload):
+            worker_id = payload.get("job_id", "job")
+            state = payload.get("state", "running")
+            set_worker_status(self.ui, {worker_id: state})
+
+            if state == "waiting_confirm":
+                set_confirm_state(self.ui, "approve")
+            elif state == "waiting_lock":
+                set_confirm_state(self.ui, "lock")
+            else:
+                set_confirm_state(self.ui, "idle")
+
+        def on_job_log(payload):
+            logs = payload.get("logs", [])
+            if logs:
+                self.ui.job_log.setPlainText("\n".join(logs[-200:]))
+
+        def on_job_done(payload):
+            worker_id = payload.get("job_id", "job")
+            set_worker_status(self.ui, {worker_id: "done"})
+
+        def on_job_failed(payload):
+            worker_id = payload.get("job_id", "job")
+            set_worker_status(self.ui, {worker_id: "failed"})
+
+        self.world.event_bus.subscribe("job_state", on_job_state)
+        self.world.event_bus.subscribe("job_log", on_job_log)
+        self.world.event_bus.subscribe("job_done", on_job_done)
+        self.world.event_bus.subscribe("job_failed", on_job_failed)
 
 
     # RESIZE EVENTS
