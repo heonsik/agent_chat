@@ -370,7 +370,8 @@ class MainWindow(QMainWindow):
             deep_agent_llm_factory=llm_factory,
         )
         self.world.start_workers()
-        self.gm = GeneralManager(self.world)
+        gm_llm = self._build_gm_llm() if os.environ.get("GM_LLM_ENABLED") == "1" else None
+        self.gm = GeneralManager(self.world, llm=gm_llm)
         self._bind_event_bus()
 
     def _bind_chat_input(self):
@@ -536,6 +537,17 @@ class MainWindow(QMainWindow):
             )
 
         return factory
+
+    @staticmethod
+    def _build_gm_llm():
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=os.environ.get("GM_LLM_MODEL", os.environ.get("DEEP_AGENT_MODEL", "openai/gpt-4.1")),
+            api_key=os.environ.get("OPENROUTER_API_KEY"),
+            base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            max_tokens=int(os.environ.get("GM_LLM_MAX_TOKENS", "512")),
+        )
 
 
     # RESIZE EVENTS

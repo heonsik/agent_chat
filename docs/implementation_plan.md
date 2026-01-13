@@ -3,6 +3,18 @@
 이 문서는 GM LangGraph + DeepAgent Worker + ToolRuntimeAdapter 구조를 기준으로 구현 순서를 정리한다.
 
 ---
+## Priority (updated)
+
+- 1) GM LangGraph routing (was 3)
+- 2) WorkerPool + JobRunner
+- 3) DeepAgent integration
+- 4) UI ??
+- 5) ??? ????
+- 6) ?? ?? (???)
+- 7) ToolRuntimeAdapter MVP (???)
+
+---
+
 
 ## 0) 전제
 
@@ -12,7 +24,7 @@
 
 ---
 
-## 1) 1단계: 기본 런타임 골격
+## 1) 1단계: 기본 런타임 골격 (???)
 
 ### 참고 문서
 - `agent_world_models_v2.md` (상태/클래스 구조)
@@ -32,7 +44,7 @@
 
 ---
 
-## 2) 2단계: ToolRuntimeAdapter MVP
+## 2) 2단계: ToolRuntimeAdapter MVP (???)
 
 ### 참고 문서
 - `tool_runtime_adapter_spec.md` (상세 계약)
