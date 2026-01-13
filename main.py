@@ -355,6 +355,12 @@ class MainWindow(QMainWindow):
 
         detail_toggle.toggled.connect(toggle_detail_view)
 
+        def handle_job_chat_double_click(event):
+            detail_toggle.setChecked(not detail_toggle.isChecked())
+            QPlainTextEdit.mouseDoubleClickEvent(job_chat, event)
+
+        job_chat.mouseDoubleClickEvent = handle_job_chat_double_click
+
         layout.addWidget(left_sidebar)
         layout.addWidget(splitter, 1)
         layout.addWidget(dashboard_panel)
@@ -364,10 +370,12 @@ class MainWindow(QMainWindow):
         specs_path = os.path.join(base_dir, "app", "toolbox", "specs", "tools.yaml")
         enable_deep_agent = os.environ.get("DEEP_AGENT_ENABLED") == "1"
         llm_factory = self._build_deep_agent_llm_factory() if enable_deep_agent else None
+        worker_count = int(os.environ.get("WORKER_COUNT", "1"))
         self.world = WorldWiring(
             specs_path=specs_path,
             enable_deep_agent=enable_deep_agent,
             deep_agent_llm_factory=llm_factory,
+            worker_count=worker_count,
         )
         self.world.start_workers()
         gm_llm = self._build_gm_llm() if os.environ.get("GM_LLM_ENABLED") == "1" else None

@@ -1,26 +1,27 @@
 from __future__ import annotations
 
-from collections import deque
+import queue
 import time
-from typing import Any, Callable, Deque, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.world.job_runner import JobRunner
 
 
 class WorkerPool:
     def __init__(self, job_runner: JobRunner, event_bus=None) -> None:
-        self._queue: Deque[Dict[str, Any]] = deque()
+        self._queue: queue.Queue[Dict[str, Any]] = queue.Queue()
         self._job_runner = job_runner
         self._event_bus = event_bus
 
     def submit(self, job_id: str, todos: Iterable[Dict[str, Any]] | None) -> None:
-        self._queue.append({"job_id": job_id, "todos": list(todos or [])})
+        self._queue.put({"job_id": job_id, "todos": list(todos or [])})
         self._emit_queue()
 
     def fetch_job(self) -> Optional[Dict[str, Any]]:
-        if not self._queue:
+        try:
+            job = self._queue.get_nowait()
+        except queue.Empty:
             return None
-        job = self._queue.popleft()
         self._emit_queue()
         return job
 
@@ -32,7 +33,7 @@ class WorkerPool:
 
     def run_until_empty(self) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
-        while self._queue:
+        while not self._queue.empty():
             result = self.run_next()
             if result is not None:
                 results.append(result)
@@ -50,7 +51,7 @@ class WorkerPool:
             return
         self._event_bus.publish(
             "queue_state",
-            {"queued": len(self._queue)},
+            {"queued": self._queue.qsize()},
         )
 
 

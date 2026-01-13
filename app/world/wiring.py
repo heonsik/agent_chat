@@ -23,6 +23,7 @@ class WorldWiring:
         adapters: Dict[str, Any] | None = None,
         enable_deep_agent: bool = False,
         deep_agent_llm_factory: Any | None = None,
+        worker_count: int = 1,
     ) -> None:
         self._specs_path = Path(specs_path)
         self._adapters = adapters or {
@@ -32,7 +33,8 @@ class WorldWiring:
         }
         self.event_bus = EventBus()
         self._stop_event = Event()
-        self._worker_thread: Thread | None = None
+        self._worker_threads: list[Thread] = []
+        self._worker_count = max(1, worker_count)
 
         registry = load_specs(self._specs_path)
         specs_dict = {key: spec.spec for key, spec in registry.items()}
@@ -53,20 +55,23 @@ class WorldWiring:
         self.job_manager.set_worker_pool(self.worker_pool)
 
     def start_workers(self) -> None:
-        if self._worker_thread and self._worker_thread.is_alive():
+        if self._worker_threads and any(thread.is_alive() for thread in self._worker_threads):
             return
         self._stop_event.clear()
-        self._worker_thread = Thread(
-            target=self.worker_pool.run_loop,
-            args=(self._stop_event.is_set,),
-            daemon=True,
-        )
-        self._worker_thread.start()
+        self._worker_threads = []
+        for _ in range(self._worker_count):
+            thread = Thread(
+                target=self.worker_pool.run_loop,
+                args=(self._stop_event.is_set,),
+                daemon=True,
+            )
+            thread.start()
+            self._worker_threads.append(thread)
 
     def stop_workers(self) -> None:
         self._stop_event.set()
-        if self._worker_thread:
-            self._worker_thread.join(timeout=1.0)
+        for thread in self._worker_threads:
+            thread.join(timeout=1.0)
 
     def submit_job(self, request_text: str, todos: list[dict[str, Any]] | None) -> str:
         job = self.job_manager.create_job(request_text)
