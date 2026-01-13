@@ -35,7 +35,7 @@ class WorldWiring:
 
         self.job_manager = JobManager(event_bus=self.event_bus)
         self.job_runner = JobRunner(self.job_manager, self.tool_adapter)
-        self.worker_pool = WorkerPool(self.job_runner)
+        self.worker_pool = WorkerPool(self.job_runner, event_bus=self.event_bus)
         self.job_manager.set_worker_pool(self.worker_pool)
 
     def start_workers(self) -> None:

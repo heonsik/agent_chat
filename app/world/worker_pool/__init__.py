@@ -8,17 +8,21 @@ from app.world.job_runner import JobRunner
 
 
 class WorkerPool:
-    def __init__(self, job_runner: JobRunner) -> None:
+    def __init__(self, job_runner: JobRunner, event_bus=None) -> None:
         self._queue: Deque[Dict[str, Any]] = deque()
         self._job_runner = job_runner
+        self._event_bus = event_bus
 
     def submit(self, job_id: str, todos: Iterable[Dict[str, Any]]) -> None:
         self._queue.append({"job_id": job_id, "todos": list(todos)})
+        self._emit_queue()
 
     def fetch_job(self) -> Optional[Dict[str, Any]]:
         if not self._queue:
             return None
-        return self._queue.popleft()
+        job = self._queue.popleft()
+        self._emit_queue()
+        return job
 
     def run_next(self) -> Optional[Dict[str, Any]]:
         job = self.fetch_job()
@@ -40,6 +44,14 @@ class WorkerPool:
             if result is None:
                 time.sleep(idle_sleep_s)
                 continue
+
+    def _emit_queue(self) -> None:
+        if self._event_bus is None:
+            return
+        self._event_bus.publish(
+            "queue_state",
+            {"queued": len(self._queue)},
+        )
 
 
 __all__ = ["WorkerPool"]

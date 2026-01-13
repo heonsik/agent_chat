@@ -460,10 +460,15 @@ class MainWindow(QMainWindow):
                 self.ui.job_chat.appendPlainText(f"failed={result}")
                 self.ui.chat_log.appendPlainText(f"GM: failed={result}")
 
+        def on_queue_state(payload):
+            queued = payload.get("queued", 0)
+            self.ui.chat_log.appendPlainText(f"GM: queued={queued}")
+
         self.world.event_bus.subscribe("job_state", on_job_state)
         self.world.event_bus.subscribe("job_log", on_job_log)
         self.world.event_bus.subscribe("job_done", on_job_done)
         self.world.event_bus.subscribe("job_failed", on_job_failed)
+        self.world.event_bus.subscribe("queue_state", on_queue_state)
 
 
     # RESIZE EVENTS
