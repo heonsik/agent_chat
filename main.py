@@ -20,7 +20,7 @@ import platform
 
 # IMPORT / GUI AND MODULES AND WIDGETS
 # ///////////////////////////////////////////////////////////////
-from app.ui.bindings import set_confirm_state, set_worker_status
+from app.ui.bindings import set_confirm_state
 from app.world.general_manager import GeneralManager
 from app.world.wiring import WorldWiring
 from app.ui_vendor.modules import *
@@ -427,10 +427,28 @@ class MainWindow(QMainWindow):
         return None
 
     def _bind_event_bus(self):
+        def _update_worker_line(worker_id: str, state: str) -> None:
+            items = [self.ui.dashboard_list.item(i).text() for i in range(self.ui.dashboard_list.count())]
+            queue_items = [item for item in items if item.startswith("queue:")]
+            others = [item for item in items if not item.startswith("queue:")]
+            updated = [item for item in others if not item.startswith(f"{worker_id}:")]
+            updated.append(f"{worker_id}: {state}")
+            self.ui.dashboard_list.clear()
+            for item in queue_items + sorted(updated):
+                self.ui.dashboard_list.addItem(item)
+
+        def _set_queue_line(queued: int) -> None:
+            items = [self.ui.dashboard_list.item(i).text() for i in range(self.ui.dashboard_list.count())]
+            queue_line = f"queue: {queued}"
+            filtered = [item for item in items if not item.startswith("queue:")]
+            self.ui.dashboard_list.clear()
+            for item in [queue_line] + filtered:
+                self.ui.dashboard_list.addItem(item)
+
         def on_job_state(payload):
             worker_id = payload.get("job_id", "job")
             state = payload.get("state", "running")
-            set_worker_status(self.ui, {worker_id: state})
+            _update_worker_line(worker_id, state)
 
             if state == "waiting_confirm":
                 set_confirm_state(self.ui, "approve")
@@ -446,7 +464,7 @@ class MainWindow(QMainWindow):
 
         def on_job_done(payload):
             worker_id = payload.get("job_id", "job")
-            set_worker_status(self.ui, {worker_id: "done"})
+            _update_worker_line(worker_id, "done")
             result = payload.get("result")
             if result is not None:
                 self.ui.job_chat.appendPlainText(f"result={result}")
@@ -454,7 +472,7 @@ class MainWindow(QMainWindow):
 
         def on_job_failed(payload):
             worker_id = payload.get("job_id", "job")
-            set_worker_status(self.ui, {worker_id: "failed"})
+            _update_worker_line(worker_id, "failed")
             result = payload.get("result")
             if result is not None:
                 self.ui.job_chat.appendPlainText(f"failed={result}")
@@ -462,7 +480,7 @@ class MainWindow(QMainWindow):
 
         def on_queue_state(payload):
             queued = payload.get("queued", 0)
-            self.ui.chat_log.appendPlainText(f"GM: queued={queued}")
+            _set_queue_line(queued)
 
         self.world.event_bus.subscribe("job_state", on_job_state)
         self.world.event_bus.subscribe("job_log", on_job_log)
