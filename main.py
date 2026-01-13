@@ -317,6 +317,7 @@ class MainWindow(QMainWindow):
         # Expose widgets for later wiring
         self.ui.chat_log = chat_log
         self.ui.chat_input = chat_input
+        self.ui.chat_send = chat_send
         self.ui.job_chat = job_chat
         self.ui.job_log = job_log
         self.ui.dashboard_list = dash_list
@@ -340,7 +341,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(dashboard_panel)
 
     def _setup_world_wiring(self):
-        specs_path = os.path.join("app", "toolbox", "specs", "tools.yaml")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        specs_path = os.path.join(base_dir, "app", "toolbox", "specs", "tools.yaml")
         self.world = WorldWiring(specs_path=specs_path)
         self.world.start_workers()
         self.gm = GeneralManager(self.world)
@@ -406,10 +408,12 @@ class MainWindow(QMainWindow):
             response = self.gm.handle(f"result {self._active_job_id}")
             self.ui.chat_log.appendPlainText(f"GM: {response.text}")
 
-        self.ui.btn_save.clicked.disconnect()
+        if self.ui.btn_save.receivers("clicked()"):
+            self.ui.btn_save.clicked.disconnect()
         self.ui.btn_save.clicked.connect(handle_status)
 
-        self.ui.btn_new.clicked.disconnect()
+        if self.ui.btn_new.receivers("clicked()"):
+            self.ui.btn_new.clicked.disconnect()
         self.ui.btn_new.clicked.connect(handle_result)
 
     def _extract_todos(self, text: str):
@@ -509,6 +513,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(os.path.join("app", "ui_vendor", "icon.ico")))
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    app.setWindowIcon(QIcon(os.path.join(base_dir, "app", "ui_vendor", "icon.ico")))
     window = MainWindow()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

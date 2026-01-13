@@ -1,25 +1,26 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from uuid import uuid4
 
 from app.world.events import EventBus
 from app.world.types import JobRecord, JobState
-from app.world.worker_pool import WorkerPool
+if TYPE_CHECKING:
+    from app.world.worker_pool import WorkerPool
 
 
 class JobManager:
     def __init__(
         self,
         event_bus: Optional[EventBus] = None,
-        worker_pool: Optional[WorkerPool] = None,
+        worker_pool: Optional["WorkerPool"] = None,
     ) -> None:
         self._jobs: Dict[str, JobRecord] = {}
         self._event_bus = event_bus
         self._worker_pool = worker_pool
 
-    def set_worker_pool(self, worker_pool: WorkerPool) -> None:
+    def set_worker_pool(self, worker_pool: "WorkerPool") -> None:
         self._worker_pool = worker_pool
 
     def create_job(self, request_text: Optional[str], metadata: Optional[Dict[str, Any]] = None) -> JobRecord:
