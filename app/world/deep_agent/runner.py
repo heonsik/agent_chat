@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import inspect
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from app.world.adapter.tool_runtime_adapter import ToolRuntimeAdapter
@@ -98,7 +99,8 @@ class DeepAgentRunner:
         create_deep_agent = self._load_create_deep_agent()
         llm = self._create_llm()
         tools = self._build_tools(skip_confirm=skip_confirm)
-        agent = create_deep_agent(model=llm, tools=tools)
+        system_prompt = self._load_prompt("system.md")
+        agent = create_deep_agent(model=llm, tools=tools, system_prompt=system_prompt)
         if not skip_confirm:
             self._agent = agent
         return agent
@@ -122,6 +124,10 @@ class DeepAgentRunner:
             input_schema = spec.get("inputSchema") or {}
             tools.append(_build_tool(tool_key, self._adapter, description, skip_confirm, input_schema))
         return tools
+
+    def _load_prompt(self, filename: str) -> str:
+        path = Path(__file__).resolve().parent / "prompts" / filename
+        return path.read_text(encoding="utf-8")
 
     @staticmethod
     def _invoke(agent: Any, request_text: str) -> Any:
@@ -151,3 +157,31 @@ def extract_summary(output: Any) -> Optional[str]:
                 if isinstance(content, str) and content.strip():
                     return content
     return None
+
+
+def extract_subagent_calls(output: Any) -> list[str]:
+    messages = []
+    if isinstance(output, dict):
+        messages = output.get("messages", [])
+    elif isinstance(output, list):
+        messages = output
+    subagents: list[str] = []
+    for msg in messages:
+        tool_calls = []
+        if isinstance(msg, dict):
+            tool_calls = msg.get("tool_calls", []) or []
+        else:
+            tool_calls = getattr(msg, "tool_calls", []) or []
+        for call in tool_calls:
+            name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
+            if name != "task":
+                continue
+            args = call.get("args") if isinstance(call, dict) else getattr(call, "args", None)
+            subagent_type = None
+            if isinstance(args, dict):
+                subagent_type = args.get("subagent_type")
+            if subagent_type:
+                subagents.append(str(subagent_type))
+            else:
+                subagents.append("task")
+    return subagents

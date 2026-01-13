@@ -50,9 +50,11 @@ class GeneralManager:
             response = self._llm.invoke(prompt)
             content = getattr(response, "content", "") if response else ""
             intent = (content or "").strip().lower()
-            return intent if intent in {"start", "status", "cancel", "result", "list", "help"} else "unknown"
+            if intent in {"status", "cancel", "result", "list", "help"}:
+                return intent
+            return "start"
         except Exception:
-            return self._route_intent(text)
+            return "start"
 
     def _extract_job_id(self, text: str) -> Optional[str]:
         import re

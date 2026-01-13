@@ -44,3 +44,20 @@ tools:
     description: "Play a song"
     inputSchema: {}
     outputSchema: {}
+
+  ListDirTool:
+    type: local
+    local:
+      entry: app.toolbox.tools_local.fs_tools:list_directory
+    capacity: infinite
+    confirmPolicy: none
+    longtime: false
+    description: "List directory entries"
+    inputSchema:
+      type: object
+      properties:
+        path:
+          type: string
+          description: "Directory path"
+      required: []
+    outputSchema: {}

@@ -18,6 +18,7 @@ import sys
 import os
 import platform
 import json
+from PySide6.QtCore import QPropertyAnimation, QEasingCurve
 
 # IMPORT / GUI AND MODULES AND WIDGETS
 # ///////////////////////////////////////////////////////////////
@@ -242,11 +243,12 @@ class MainWindow(QMainWindow):
         detail_toggle.setCheckable(True)
         detail_toggle.setText("Show details")
         detail_toggle.setChecked(False)
+        detail_toggle.setEnabled(False)
         job_layout.addWidget(detail_toggle)
         job_result_detail = QPlainTextEdit()
         job_result_detail.setReadOnly(True)
         job_result_detail.setPlaceholderText("Result details...")
-        job_result_detail.setVisible(False)
+        job_result_detail.setMaximumHeight(0)
         job_layout.addWidget(job_result_detail)
         confirm_title = QLabel("Confirm Options (state-driven)")
         confirm_title.setStyleSheet("font-size: 11px; color: #888;")
@@ -333,6 +335,10 @@ class MainWindow(QMainWindow):
         self.ui.job_log = job_log
         self.ui.job_result_detail = job_result_detail
         self.ui.detail_toggle = detail_toggle
+        self.ui.detail_anim = QPropertyAnimation(job_result_detail, b"maximumHeight")
+        self.ui.detail_anim.setDuration(180)
+        self.ui.detail_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self.ui.detail_target_height = 220
         self.ui.dashboard_list = dash_list
         self.ui.btn_wait = btn_wait
         self.ui.btn_cancel = btn_cancel
@@ -350,7 +356,12 @@ class MainWindow(QMainWindow):
         set_confirm_state(self.ui, "idle")
 
         def toggle_detail_view(checked: bool):
-            self.ui.job_result_detail.setVisible(checked)
+            self.ui.detail_anim.stop()
+            current_height = self.ui.job_result_detail.maximumHeight()
+            target = self.ui.detail_target_height if checked else 0
+            self.ui.detail_anim.setStartValue(current_height)
+            self.ui.detail_anim.setEndValue(target)
+            self.ui.detail_anim.start()
             self.ui.detail_toggle.setText("Hide details" if checked else "Show details")
 
         detail_toggle.toggled.connect(toggle_detail_view)
@@ -361,6 +372,13 @@ class MainWindow(QMainWindow):
 
         job_chat.mouseDoubleClickEvent = handle_job_chat_double_click
 
+        def handle_job_chat_press(event):
+            if detail_toggle.isEnabled():
+                detail_toggle.setChecked(not detail_toggle.isChecked())
+            QPlainTextEdit.mousePressEvent(job_chat, event)
+
+        job_chat.mousePressEvent = handle_job_chat_press
+
         layout.addWidget(left_sidebar)
         layout.addWidget(splitter, 1)
         layout.addWidget(dashboard_panel)
@@ -368,17 +386,22 @@ class MainWindow(QMainWindow):
     def _setup_world_wiring(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         specs_path = os.path.join(base_dir, "app", "toolbox", "specs", "tools.yaml")
-        enable_deep_agent = os.environ.get("DEEP_AGENT_ENABLED") == "1"
-        llm_factory = self._build_deep_agent_llm_factory() if enable_deep_agent else None
+        deep_agent_enabled = os.environ.get("DEEP_AGENT_ENABLED")
+        if deep_agent_enabled is None:
+            deep_agent_enabled = "1" if os.environ.get("OPENROUTER_API_KEY") else "0"
+        llm_factory = self._build_deep_agent_llm_factory()
         worker_count = int(os.environ.get("WORKER_COUNT", "1"))
         self.world = WorldWiring(
             specs_path=specs_path,
-            enable_deep_agent=enable_deep_agent,
+            enable_deep_agent=deep_agent_enabled == "1",
             deep_agent_llm_factory=llm_factory,
             worker_count=worker_count,
         )
         self.world.start_workers()
-        gm_llm = self._build_gm_llm() if os.environ.get("GM_LLM_ENABLED") == "1" else None
+        gm_enabled = os.environ.get("GM_LLM_ENABLED")
+        if gm_enabled is None:
+            gm_enabled = "1" if os.environ.get("OPENROUTER_API_KEY") else "0"
+        gm_llm = self._build_gm_llm() if gm_enabled == "1" else None
         self.gm = GeneralManager(self.world, llm=gm_llm)
         self._bind_event_bus()
 
@@ -512,6 +535,12 @@ class MainWindow(QMainWindow):
                     self.ui.job_chat.appendPlainText(f"result={result}")
                 if isinstance(result, dict) and "detail" in result:
                     self.ui.job_result_detail.setPlainText(json.dumps(result["detail"], indent=2))
+                    self.ui.detail_toggle.setEnabled(True)
+                else:
+                    self.ui.job_result_detail.clear()
+                    self.ui.detail_toggle.setChecked(False)
+                    self.ui.job_result_detail.setMaximumHeight(0)
+                    self.ui.detail_toggle.setEnabled(False)
                 self.ui.chat_log.appendPlainText(f"GM: result={result}")
 
         def on_job_failed(payload):
@@ -538,11 +567,11 @@ class MainWindow(QMainWindow):
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
-                model=os.environ.get("DEEP_AGENT_MODEL", "openai/gpt-4.1"),
-                api_key=os.environ.get("OPENROUTER_API_KEY"),
-                base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-                max_tokens=int(os.environ.get("DEEP_AGENT_MAX_TOKENS", "4000")),
-            )
+            model=os.environ.get("DEEP_AGENT_MODEL", os.environ.get("GM_LLM_MODEL", "openai/gpt-4.1")),
+            api_key=os.environ.get("DEEP_AGENT_API_KEY", os.environ.get("OPENROUTER_API_KEY")),
+            base_url=os.environ.get("DEEP_AGENT_BASE_URL", os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")),
+            max_tokens=int(os.environ.get("DEEP_AGENT_MAX_TOKENS", "4000")),
+        )
 
         return factory
 
@@ -552,8 +581,8 @@ class MainWindow(QMainWindow):
 
         return ChatOpenAI(
             model=os.environ.get("GM_LLM_MODEL", os.environ.get("DEEP_AGENT_MODEL", "openai/gpt-4.1")),
-            api_key=os.environ.get("OPENROUTER_API_KEY"),
-            base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            api_key=os.environ.get("GM_LLM_API_KEY", os.environ.get("OPENROUTER_API_KEY")),
+            base_url=os.environ.get("GM_LLM_BASE_URL", os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")),
             max_tokens=int(os.environ.get("GM_LLM_MAX_TOKENS", "512")),
         )
 
