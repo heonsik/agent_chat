@@ -40,11 +40,34 @@ class GeneralManager:
             return "help"
         return "unknown"
 
+
     def _route_intent_llm(self, text: str) -> str:
         if self._llm is None:
             return self._route_intent(text)
+        lower = text.strip().lower()
+        if "\uBAA9\uB85D" in lower:
+            return "list"
+        if "\uC0C1\uD0DC" in lower or "\uC9C4\uD589" in lower:
+            return "status"
+        if "\uCDE8\uC18C" in lower or "\uC911\uC9C0" in lower or "\uC911\uB2E8" in lower:
+            return "cancel"
+        if "\uACB0\uACFC" in lower:
+            return "result"
+        if "\uB3C4\uC6C0" in lower or "help" in lower:
+            return "help"
+        if "\uC2DC\uC791" in lower:
+            return "start"
         prompt = (
-            "Classify the user request into one of: start, status, cancel, result, list, help, unknown.\n"
+            "Classify the user request into one label only.\n"
+            "Labels: start, status, cancel, result, list, help, unknown.\n"
+            "Examples:\n"
+            "- \"start a new job\" -> start\n"
+            "- \"status 123\" -> status\n"
+            "- \"cancel 123\" -> cancel\n"
+            "- \"result 123\" -> result\n"
+            "- \"list jobs\" -> list\n"
+            "- \"help\" -> help\n"
+            "- \"hello\" -> unknown\n"
             f"Request: {text}\n"
             "Return only the label."
         )
@@ -57,9 +80,11 @@ class GeneralManager:
             return self._route_intent(text)
 
     def _extract_job_id(self, text: str) -> Optional[str]:
-        parts = text.split()
-        if len(parts) >= 2:
-            return parts[1]
+        import re
+
+        match = re.search(r"([A-Za-z0-9]+)\s*$", text)
+        if match:
+            return match.group(1)
         return None
 
     def _build_graph(self):
@@ -68,7 +93,7 @@ class GeneralManager:
         def route_intent(state: Dict[str, Any]) -> Dict[str, Any]:
             text = state.get("text", "")
             intent = self._route_intent_llm(text)
-            return {"intent": intent}
+            return {"intent": intent, "text": text, "todos": state.get("todos")}
 
         def handle_start(state: Dict[str, Any]) -> Dict[str, Any]:
             todos = state.get("todos")
