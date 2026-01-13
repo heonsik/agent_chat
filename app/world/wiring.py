@@ -59,6 +59,12 @@ class WorldWiring:
         self.job_manager.dispatch(job.job_id, todos)
         return job.job_id
 
+    def cancel_job(self, job_id: str) -> bool:
+        canceled = self.job_manager.cancel_job(job_id)
+        if canceled:
+            self.job_runner.cancel_job(job_id)
+        return canceled
+
     def approve_job(self, job_id: str) -> None:
         self.job_runner.resume_confirm(job_id, approved=True)
 

@@ -35,7 +35,7 @@ class GeneralManager:
             job_id = self._extract_job_id(text)
             if not job_id:
                 return GMResponse(text="job_id required", job_id=None)
-            canceled = self._wiring.job_manager.cancel_job(job_id)
+            canceled = self._wiring.cancel_job(job_id)
             return GMResponse(text="canceled" if canceled else "not found", job_id=job_id)
         if intent == "result":
             job_id = self._extract_job_id(text)
@@ -49,6 +49,8 @@ class GeneralManager:
             jobs = self._wiring.job_manager.list_jobs()
             summary = ", ".join([f"{job.job_id}:{job.state.value}" for job in jobs]) or "empty"
             return GMResponse(text=f"jobs={summary}")
+        if intent == "help":
+            return GMResponse(text="commands: start <ToolKey> [k=v], status <job_id>, result <job_id>, cancel <job_id>, list")
         return GMResponse(text="unknown command")
 
     def _route_intent(self, text: str) -> str:
@@ -63,6 +65,8 @@ class GeneralManager:
             return "result"
         if lower.startswith("list"):
             return "list"
+        if lower.startswith("help"):
+            return "help"
         return "unknown"
 
     def _extract_job_id(self, text: str) -> Optional[str]:

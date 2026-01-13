@@ -51,6 +51,10 @@ class JobRunner:
             return {"status": "waiting_lock", "reason": result.reason}
         return self._run_todos(job_id, remaining, start_index=0)
 
+    def cancel_job(self, job_id: str) -> None:
+        if job_id in self._pending_confirm:
+            self._pending_confirm.pop(job_id, None)
+
     def _run_todos(
         self,
         job_id: str,
