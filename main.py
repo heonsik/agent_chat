@@ -17,6 +17,7 @@
 import sys
 import os
 import platform
+import json
 
 # IMPORT / GUI AND MODULES AND WIDGETS
 # ///////////////////////////////////////////////////////////////
@@ -237,6 +238,16 @@ class MainWindow(QMainWindow):
         job_tabs.addTab(job_chat, "Job Chat")
         job_tabs.addTab(job_log, "Tool Logs")
         job_layout.addWidget(job_tabs, 1)
+        detail_toggle = QToolButton()
+        detail_toggle.setCheckable(True)
+        detail_toggle.setText("Show details")
+        detail_toggle.setChecked(False)
+        job_layout.addWidget(detail_toggle)
+        job_result_detail = QPlainTextEdit()
+        job_result_detail.setReadOnly(True)
+        job_result_detail.setPlaceholderText("Result details...")
+        job_result_detail.setVisible(False)
+        job_layout.addWidget(job_result_detail)
         confirm_title = QLabel("Confirm Options (state-driven)")
         confirm_title.setStyleSheet("font-size: 11px; color: #888;")
         job_layout.addWidget(confirm_title)
@@ -320,6 +331,8 @@ class MainWindow(QMainWindow):
         self.ui.chat_send = chat_send
         self.ui.job_chat = job_chat
         self.ui.job_log = job_log
+        self.ui.job_result_detail = job_result_detail
+        self.ui.detail_toggle = detail_toggle
         self.ui.dashboard_list = dash_list
         self.ui.btn_wait = btn_wait
         self.ui.btn_cancel = btn_cancel
@@ -335,6 +348,12 @@ class MainWindow(QMainWindow):
         self.ui.left_sidebar = left_sidebar
 
         set_confirm_state(self.ui, "idle")
+
+        def toggle_detail_view(checked: bool):
+            self.ui.job_result_detail.setVisible(checked)
+            self.ui.detail_toggle.setText("Hide details" if checked else "Show details")
+
+        detail_toggle.toggled.connect(toggle_detail_view)
 
         layout.addWidget(left_sidebar)
         layout.addWidget(splitter, 1)
@@ -477,7 +496,13 @@ class MainWindow(QMainWindow):
             _update_worker_line(worker_id, "done")
             result = payload.get("result")
             if result is not None:
-                self.ui.job_chat.appendPlainText(f"result={result}")
+                summary = result.get("summary") if isinstance(result, dict) else None
+                if summary:
+                    self.ui.job_chat.appendPlainText(summary)
+                else:
+                    self.ui.job_chat.appendPlainText(f"result={result}")
+                if isinstance(result, dict) and "detail" in result:
+                    self.ui.job_result_detail.setPlainText(json.dumps(result["detail"], indent=2))
                 self.ui.chat_log.appendPlainText(f"GM: result={result}")
 
         def on_job_failed(payload):

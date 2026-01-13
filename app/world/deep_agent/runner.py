@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 from typing import Any, Callable, Dict, Optional
 
 from app.world.adapter.tool_runtime_adapter import ToolRuntimeAdapter
@@ -25,22 +26,48 @@ class DeepAgentResult:
     reason: Optional[str] = None
 
 
-class AdapterTool:
-    def __init__(self, tool_key: str, adapter: ToolRuntimeAdapter, description: str, skip_confirm: bool) -> None:
-        self.name = tool_key
-        self.description = description
-        self.__name__ = tool_key
-        self.__doc__ = description
-        self._adapter = adapter
-        self._skip_confirm = skip_confirm
-
-    def __call__(self, **kwargs: Any) -> Any:
-        result = self._adapter.run({"tool": self.name, "args": kwargs}, skip_confirm=self._skip_confirm)
+def _build_tool(
+    tool_key: str,
+    adapter: ToolRuntimeAdapter,
+    description: str,
+    skip_confirm: bool,
+    input_schema: Optional[Dict[str, Any]] = None,
+) -> Callable[..., Any]:
+    def tool(**kwargs: Any) -> Any:
+        result = adapter.run({"tool": tool_key, "args": kwargs}, skip_confirm=skip_confirm)
         if result.state == "done":
             return result.result.get("value") if result.result else None
         if result.state in ("waiting_lock", "waiting_confirm"):
             raise ToolBlockedError(result.state, result.reason)
         raise RuntimeError(result.error or "tool_failed")
+
+    tool.__name__ = tool_key
+    tool.__doc__ = description
+    if input_schema:
+        _apply_signature(tool, input_schema)
+    return tool
+
+
+def _apply_signature(tool: Callable[..., Any], schema: Dict[str, Any]) -> None:
+    properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+    required = set(schema.get("required", []) if isinstance(schema, dict) else [])
+    params: list[inspect.Parameter] = []
+    annotations: Dict[str, Any] = {}
+    for name in properties.keys():
+        default = inspect.Parameter.empty if name in required else None
+        params.append(
+            inspect.Parameter(
+                name,
+                inspect.Parameter.KEYWORD_ONLY,
+                default=default,
+                annotation=Any,
+            )
+        )
+        annotations[name] = Any
+    if params:
+        tool.__signature__ = inspect.Signature(parameters=params)
+        annotations["return"] = Any
+        tool.__annotations__ = annotations
 
 
 class DeepAgentRunner:
@@ -71,7 +98,7 @@ class DeepAgentRunner:
         create_deep_agent = self._load_create_deep_agent()
         llm = self._create_llm()
         tools = self._build_tools(skip_confirm=skip_confirm)
-        agent = create_deep_agent(llm=llm, tools=tools)
+        agent = create_deep_agent(model=llm, tools=tools)
         if not skip_confirm:
             self._agent = agent
         return agent
@@ -92,15 +119,35 @@ class DeepAgentRunner:
         tools: list[Any] = []
         for tool_key, spec in self._specs.items():
             description = spec.get("description") or ""
-            tools.append(AdapterTool(tool_key, self._adapter, description, skip_confirm))
+            input_schema = spec.get("inputSchema") or {}
+            tools.append(_build_tool(tool_key, self._adapter, description, skip_confirm, input_schema))
         return tools
 
     @staticmethod
     def _invoke(agent: Any, request_text: str) -> Any:
         if hasattr(agent, "invoke"):
-            return agent.invoke(request_text)
+            try:
+                return agent.invoke(request_text)
+            except Exception:
+                return agent.invoke({"messages": [("user", request_text)]})
         if hasattr(agent, "run"):
             return agent.run(request_text)
         if callable(agent):
             return agent(request_text)
         raise DeepAgentUnavailable("deep agent runner has no callable interface")
+
+
+def extract_summary(output: Any) -> Optional[str]:
+    if isinstance(output, str):
+        return output
+    if isinstance(output, dict):
+        messages = output.get("messages")
+        if isinstance(messages, list):
+            for msg in reversed(messages):
+                if isinstance(msg, dict):
+                    content = msg.get("content")
+                else:
+                    content = getattr(msg, "content", None)
+                if isinstance(content, str) and content.strip():
+                    return content
+    return None

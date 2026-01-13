@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable
 
 from app.world.adapter.tool_runtime_adapter import ToolRuntimeAdapter, ToolRuntimeResult
-from app.world.deep_agent.runner import DeepAgentRunner
+from app.world.deep_agent.runner import DeepAgentRunner, extract_summary
 from app.world.job_manager import JobManager
 from app.world.types import JobState
 
@@ -128,5 +128,10 @@ class JobRunner:
             self._job_manager.update_state(job_id, JobState.FAILED)
             self._job_manager.set_result(job_id, {"error": error}, state=JobState.FAILED)
             return {"status": "failed", "error": error}
-        self._job_manager.set_result(job_id, {"output": result.output}, state=JobState.DONE)
-        return {"status": "done"}
+        summary = extract_summary(result.output)
+        if summary:
+            payload = {"summary": summary, "detail": result.output}
+        else:
+            payload = {"output": result.output}
+        self._job_manager.set_result(job_id, payload, state=JobState.DONE)
+        return {"status": "done", "summary": summary}

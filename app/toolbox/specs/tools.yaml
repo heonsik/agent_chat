@@ -23,7 +23,14 @@ tools:
     confirmPolicy: none
     longtime: false
     description: "Weather lookup"
-    inputSchema: {}
+    inputSchema:
+      type: object
+      properties:
+        city:
+          type: string
+          description: "City name"
+      required:
+        - city
     outputSchema: {}
 
   SongTool:
