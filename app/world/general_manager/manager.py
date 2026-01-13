@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from langgraph.graph import END, StateGraph
@@ -44,33 +45,7 @@ class GeneralManager:
     def _route_intent_llm(self, text: str) -> str:
         if self._llm is None:
             return self._route_intent(text)
-        lower = text.strip().lower()
-        if "\uBAA9\uB85D" in lower:
-            return "list"
-        if "\uC0C1\uD0DC" in lower or "\uC9C4\uD589" in lower:
-            return "status"
-        if "\uCDE8\uC18C" in lower or "\uC911\uC9C0" in lower or "\uC911\uB2E8" in lower:
-            return "cancel"
-        if "\uACB0\uACFC" in lower:
-            return "result"
-        if "\uB3C4\uC6C0" in lower or "help" in lower:
-            return "help"
-        if "\uC2DC\uC791" in lower:
-            return "start"
-        prompt = (
-            "Classify the user request into one label only.\n"
-            "Labels: start, status, cancel, result, list, help, unknown.\n"
-            "Examples:\n"
-            "- \"start a new job\" -> start\n"
-            "- \"status 123\" -> status\n"
-            "- \"cancel 123\" -> cancel\n"
-            "- \"result 123\" -> result\n"
-            "- \"list jobs\" -> list\n"
-            "- \"help\" -> help\n"
-            "- \"hello\" -> unknown\n"
-            f"Request: {text}\n"
-            "Return only the label."
-        )
+        prompt = self._load_prompt("route_intent_llm.md").format(text=text)
         try:
             response = self._llm.invoke(prompt)
             content = getattr(response, "content", "") if response else ""
@@ -86,6 +61,10 @@ class GeneralManager:
         if match:
             return match.group(1)
         return None
+
+    def _load_prompt(self, filename: str) -> str:
+        path = Path(__file__).resolve().parent / "prompts" / filename
+        return path.read_text(encoding="utf-8")
 
     def _build_graph(self):
         graph = StateGraph(dict)
