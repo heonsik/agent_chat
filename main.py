@@ -343,7 +343,13 @@ class MainWindow(QMainWindow):
     def _setup_world_wiring(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         specs_path = os.path.join(base_dir, "app", "toolbox", "specs", "tools.yaml")
-        self.world = WorldWiring(specs_path=specs_path)
+        enable_deep_agent = os.environ.get("DEEP_AGENT_ENABLED") == "1"
+        llm_factory = self._build_deep_agent_llm_factory() if enable_deep_agent else None
+        self.world = WorldWiring(
+            specs_path=specs_path,
+            enable_deep_agent=enable_deep_agent,
+            deep_agent_llm_factory=llm_factory,
+        )
         self.world.start_workers()
         self.gm = GeneralManager(self.world)
         self._bind_event_bus()
@@ -491,6 +497,20 @@ class MainWindow(QMainWindow):
         self.world.event_bus.subscribe("job_done", on_job_done)
         self.world.event_bus.subscribe("job_failed", on_job_failed)
         self.world.event_bus.subscribe("queue_state", on_queue_state)
+
+    @staticmethod
+    def _build_deep_agent_llm_factory():
+        def factory():
+            from langchain_openai import ChatOpenAI
+
+            return ChatOpenAI(
+                model=os.environ.get("DEEP_AGENT_MODEL", "openai/gpt-4.1"),
+                api_key=os.environ.get("OPENROUTER_API_KEY"),
+                base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+                max_tokens=int(os.environ.get("DEEP_AGENT_MAX_TOKENS", "4000")),
+            )
+
+        return factory
 
 
     # RESIZE EVENTS

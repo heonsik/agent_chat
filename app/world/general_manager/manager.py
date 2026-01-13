@@ -19,7 +19,7 @@ class GeneralManager:
     def handle(self, text: str, todos: Optional[list[dict[str, Any]]] = None) -> GMResponse:
         intent = self._route_intent(text)
         if intent == "start":
-            if todos is None:
+            if todos is None and not self._wiring.supports_deep_agent():
                 return GMResponse(text="todo required", job_id=None)
             job_id = self._wiring.submit_job(text, todos)
             return GMResponse(text=f"accepted job_id={job_id}", job_id=job_id)

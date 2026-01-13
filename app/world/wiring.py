@@ -11,12 +11,19 @@ from app.toolbox.runtime.router import ToolRuntime
 from app.world.adapter.tool_runtime_adapter import InventoryToolRuntimeAdapter
 from app.world.events import EventBus
 from app.world.job_manager import JobManager
+from app.world.deep_agent import DeepAgentRunner
 from app.world.job_runner import JobRunner
 from app.world.worker_pool import WorkerPool
 
 
 class WorldWiring:
-    def __init__(self, specs_path: str | Path, adapters: Dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        specs_path: str | Path,
+        adapters: Dict[str, Any] | None = None,
+        enable_deep_agent: bool = False,
+        deep_agent_llm_factory: Any | None = None,
+    ) -> None:
         self._specs_path = Path(specs_path)
         self._adapters = adapters or {
             "local": LocalAdapter(),
@@ -32,9 +39,16 @@ class WorldWiring:
         self.inventory = Inventory(specs_dict)
         self.runtime = ToolRuntime(registry, self._adapters)
         self.tool_adapter = InventoryToolRuntimeAdapter(self.inventory, self.runtime, specs_dict)
+        self.deep_agent_runner = None
+        if enable_deep_agent and deep_agent_llm_factory is not None:
+            self.deep_agent_runner = DeepAgentRunner(
+                self.tool_adapter,
+                specs_dict,
+                llm_factory=deep_agent_llm_factory,
+            )
 
         self.job_manager = JobManager(event_bus=self.event_bus)
-        self.job_runner = JobRunner(self.job_manager, self.tool_adapter)
+        self.job_runner = JobRunner(self.job_manager, self.tool_adapter, self.deep_agent_runner)
         self.worker_pool = WorkerPool(self.job_runner, event_bus=self.event_bus)
         self.job_manager.set_worker_pool(self.worker_pool)
 
@@ -54,10 +68,13 @@ class WorldWiring:
         if self._worker_thread:
             self._worker_thread.join(timeout=1.0)
 
-    def submit_job(self, request_text: str, todos: list[dict[str, Any]]) -> str:
+    def submit_job(self, request_text: str, todos: list[dict[str, Any]] | None) -> str:
         job = self.job_manager.create_job(request_text)
         self.job_manager.dispatch(job.job_id, todos)
         return job.job_id
+
+    def supports_deep_agent(self) -> bool:
+        return self.deep_agent_runner is not None
 
     def cancel_job(self, job_id: str) -> bool:
         canceled = self.job_manager.cancel_job(job_id)

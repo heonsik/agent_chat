@@ -35,7 +35,7 @@ class JobManager:
         self._publish("job_created", job)
         return job
 
-    def dispatch(self, job_id: str, todos: List[Dict[str, Any]]) -> bool:
+    def dispatch(self, job_id: str, todos: List[Dict[str, Any]] | None) -> bool:
         if self._worker_pool is None:
             return False
         if job_id not in self._jobs:

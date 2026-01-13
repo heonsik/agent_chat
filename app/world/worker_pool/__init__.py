@@ -13,8 +13,8 @@ class WorkerPool:
         self._job_runner = job_runner
         self._event_bus = event_bus
 
-    def submit(self, job_id: str, todos: Iterable[Dict[str, Any]]) -> None:
-        self._queue.append({"job_id": job_id, "todos": list(todos)})
+    def submit(self, job_id: str, todos: Iterable[Dict[str, Any]] | None) -> None:
+        self._queue.append({"job_id": job_id, "todos": list(todos or [])})
         self._emit_queue()
 
     def fetch_job(self) -> Optional[Dict[str, Any]]:
